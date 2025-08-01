@@ -1,0 +1,588 @@
+diff --git a/.gitignore b/.gitignore
+index e63e218..b7d529a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -12,9 +12,17 @@ genesis.ssz
+ /clippy.toml
+ /.cargo
+ 
++# Downloaded xatu-sidecar library
++/xatu/src/libxatu.so
++/xatu/src/libxatu.dylib
++
+ # IntelliJ
+ /*.iml
+ .idea
+ 
+ # VSCode
+ /.vscode
++
++# Xatu build artifacts
++/xatu/src/libxatu.so
++/xatu/src/libxatu.h
+diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
+index 456376e..4698202 100644
+--- a/beacon_node/Cargo.toml
++++ b/beacon_node/Cargo.toml
+@@ -33,6 +33,7 @@ http_api = { workspace = true }
+ hyper = { workspace = true }
+ lighthouse_network = { workspace = true }
+ monitoring_api = { workspace = true }
++network = { workspace = true }
+ sensitive_url = { workspace = true }
+ serde_json = { workspace = true }
+ slasher = { workspace = true }
+diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
+index 4a6f34c..52df046 100644
+--- a/beacon_node/lighthouse_network/src/service/mod.rs
++++ b/beacon_node/lighthouse_network/src/service/mod.rs
+@@ -97,6 +97,8 @@ pub enum NetworkEvent<E: EthSpec> {
+         topic: TopicHash,
+         /// The message itself.
+         message: PubsubMessage<E>,
++        /// The size of the raw message data in bytes.
++        message_size: usize,
+     },
+     /// Inform the network to send a Status to this peer.
+     StatusPeer(PeerId),
+@@ -1560,12 +1562,18 @@ impl<E: EthSpec> Network<E> {
+                         );
+                     }
+                     Ok(msg) => {
++                        // Get the compressed size from our cache, or fall back to decompressed size
++                        let message_size =
++                            crate::types::get_compressed_size(gs_msg.sequence_number)
++                                .unwrap_or_else(|| gs_msg.data.len());
++
+                         // Notify the network
+                         return Some(NetworkEvent::PubsubMessage {
+                             id,
+                             source: propagation_source,
+                             topic: gs_msg.topic,
+                             message: msg,
++                            message_size,
+                         });
+                     }
+                 }
+diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
+index 868cdb6..2db9e55 100644
+--- a/beacon_node/lighthouse_network/src/types/mod.rs
++++ b/beacon_node/lighthouse_network/src/types/mod.rs
+@@ -12,7 +12,7 @@ pub type Enr = discv5::enr::Enr<discv5::enr::CombinedKey>;
+ 
+ pub use eth2::lighthouse::sync_state::{BackFillState, SyncState};
+ pub use globals::NetworkGlobals;
+-pub use pubsub::{PubsubMessage, SnappyTransform};
++pub use pubsub::{get_compressed_size, PubsubMessage, SnappyTransform};
+ pub use subnet::{Subnet, SubnetDiscovery};
+ pub use topics::{
+     all_topics_at_fork, core_topics_to_subscribe, is_fork_non_core_topic, subnet_from_topic_hash,
+diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
+index 601c59a..8b2b2c0 100644
+--- a/beacon_node/lighthouse_network/src/types/pubsub.rs
++++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
+@@ -4,6 +4,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
+ use crate::TopicHash;
+ use snap::raw::{decompress_len, Decoder, Encoder};
+ use ssz::{Decode, Encode};
++use std::collections::HashMap;
+ use std::io::{Error, ErrorKind};
+ use std::sync::Arc;
+ use types::{
+@@ -47,6 +48,27 @@ pub enum PubsubMessage<E: EthSpec> {
+     LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
+ }
+ 
++// Thread-local storage for mapping sequence numbers to compressed message sizes
++thread_local! {
++    static COMPRESSED_SIZE_CACHE: std::cell::RefCell<HashMap<Option<u64>, usize>> = std::cell::RefCell::new(HashMap::new());
++}
++
++/// Get the compressed size for a given sequence number (message ID)
++pub fn get_compressed_size(sequence_number: Option<u64>) -> Option<usize> {
++    COMPRESSED_SIZE_CACHE.with(|cache| cache.borrow().get(&sequence_number).copied())
++}
++
++/// Clear old entries from the cache to prevent unbounded growth
++fn cleanup_cache() {
++    COMPRESSED_SIZE_CACHE.with(|cache| {
++        let mut cache = cache.borrow_mut();
++        // Keep only the last 10000 messages
++        if cache.len() > 10000 {
++            cache.clear();
++        }
++    });
++}
++
+ // Implements the `DataTransform` trait of gossipsub to employ snappy compression
+ pub struct SnappyTransform {
+     /// Sets the maximum size we allow gossipsub messages to decompress to.
+@@ -70,8 +92,19 @@ impl gossipsub::DataTransform for SnappyTransform {
+         &self,
+         raw_message: gossipsub::RawMessage,
+     ) -> Result<gossipsub::Message, std::io::Error> {
++        // Store the compressed size in our cache
++        let compressed_size = raw_message.data.len();
++        COMPRESSED_SIZE_CACHE.with(|cache| {
++            cache
++                .borrow_mut()
++                .insert(raw_message.sequence_number, compressed_size);
++        });
++
++        // Periodically clean up the cache
++        cleanup_cache();
++
+         // first check the size of the compressed payload
+-        if raw_message.data.len() > self.max_compressed_len {
++        if compressed_size > self.max_compressed_len {
+             return Err(Error::new(
+                 ErrorKind::InvalidData,
+                 "ssz_snappy encoded data > max_compressed_len",
+diff --git a/beacon_node/network/Cargo.toml b/beacon_node/network/Cargo.toml
+index cdb6ba7..3cb36e3 100644
+--- a/beacon_node/network/Cargo.toml
++++ b/beacon_node/network/Cargo.toml
+@@ -46,6 +46,9 @@ tracing = { workspace = true }
+ tracing-subscriber = { workspace = true }
+ types = { workspace = true }
+ 
++# Xatu dependency
++xatu = { path = "../../xatu" }
++
+ [dev-dependencies]
+ bls = { workspace = true }
+ eth2 = { workspace = true }
+diff --git a/beacon_node/network/src/lib.rs b/beacon_node/network/src/lib.rs
+index 2a7fedb..908f1fe 100644
+--- a/beacon_node/network/src/lib.rs
++++ b/beacon_node/network/src/lib.rs
+@@ -1,4 +1,6 @@
+ /// This crate provides the network server for Lighthouse.
++extern crate xatu;
++
+ pub mod service;
+ 
+ mod metrics;
+diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
+index 5d5daae..f3f5764 100644
+--- a/beacon_node/network/src/router.rs
++++ b/beacon_node/network/src/router.rs
+@@ -14,7 +14,9 @@ use beacon_processor::{BeaconProcessorSend, DuplicateCache};
+ use futures::prelude::*;
+ use lighthouse_network::rpc::*;
+ use lighthouse_network::{
++    rpc::InboundRequestId,
+     service::api_types::{AppRequestId, SyncRequestId},
++    types::SyncState,
+     MessageId, NetworkGlobals, PeerId, PubsubMessage, Response,
+ };
+ use logging::crit;
+@@ -25,6 +27,7 @@ use tokio::sync::mpsc;
+ use tokio_stream::wrappers::UnboundedReceiverStream;
+ use tracing::{debug, error, info_span, trace, warn, Instrument};
+ use types::{BlobSidecar, DataColumnSidecar, EthSpec, ForkContext, SignedBeaconBlock};
++use xatu::ObserverResult;
+ 
+ /// Handles messages from the network and routes them to the appropriate service to be handled.
+ pub struct Router<T: BeaconChainTypes> {
+@@ -40,6 +43,8 @@ pub struct Router<T: BeaconChainTypes> {
+     network_beacon_processor: Arc<NetworkBeaconProcessor<T>>,
+     /// Provides de-bounce functionality for logging.
+     logger_debounce: TimeLatch,
++    /// Xatu chain for event processing
++    xatu_chain: Option<Arc<xatu::XatuChain<T::EthSpec>>>,
+ }
+ 
+ /// Types of messages the router can receive.
+@@ -66,9 +71,16 @@ pub enum RouterMessage<E: EthSpec> {
+         error: RPCError,
+     },
+     /// A gossip message has been received. The fields are: message id, the peer that sent us this
+-    /// message, the message itself and a bool which indicates if the message should be processed
+-    /// by the beacon chain after successful verification.
+-    PubsubMessage(MessageId, PeerId, PubsubMessage<E>, bool),
++    /// message, the topic hash, the message itself, the message size in bytes, and a bool which
++    /// indicates if the message should be processed by the beacon chain after successful verification.
++    PubsubMessage(
++        MessageId,
++        PeerId,
++        lighthouse_network::TopicHash,
++        PubsubMessage<E>,
++        usize,
++        bool,
++    ),
+     /// The peer manager has requested we re-status a peer.
+     StatusPeer(PeerId),
+     /// The peer has an updated custody group count from METADATA.
+@@ -86,6 +98,7 @@ impl<T: BeaconChainTypes> Router<T> {
+         invalid_block_storage: InvalidBlockStorage,
+         beacon_processor_send: BeaconProcessorSend<T::EthSpec>,
+         fork_context: Arc<ForkContext>,
++        xatu_chain: Option<Arc<xatu::XatuChain<T::EthSpec>>>,
+     ) -> Result<mpsc::UnboundedSender<RouterMessage<T::EthSpec>>, String> {
+         trace!("Service starting");
+ 
+@@ -124,6 +137,7 @@ impl<T: BeaconChainTypes> Router<T> {
+             network: HandlerNetworkContext::new(network_send),
+             network_beacon_processor,
+             logger_debounce: TimeLatch::default(),
++            xatu_chain,
+         };
+ 
+         // spawn handler task and move the message handler instance into the spawned thread
+@@ -178,8 +192,15 @@ impl<T: BeaconChainTypes> Router<T> {
+             } => {
+                 self.on_rpc_error(peer_id, app_request_id, error);
+             }
+-            RouterMessage::PubsubMessage(id, peer_id, gossip, should_process) => {
+-                self.handle_gossip(id, peer_id, gossip, should_process);
++            RouterMessage::PubsubMessage(
++                id,
++                peer_id,
++                topic,
++                gossip,
++                message_size,
++                should_process,
++            ) => {
++                self.handle_gossip(id, peer_id, topic, gossip, message_size, should_process);
+             }
+         }
+     }
+@@ -326,14 +347,124 @@ impl<T: BeaconChainTypes> Router<T> {
+         &mut self,
+         message_id: MessageId,
+         peer_id: PeerId,
++        topic: lighthouse_network::TopicHash,
+         gossip_message: PubsubMessage<T::EthSpec>,
++        message_size: usize,
+         should_process: bool,
+     ) {
++        // Send to xatu if enabled and node is synced
++        if let Some(xatu_chain) = &self.xatu_chain {
++            // Check sync state
++            let sync_state = self.network_globals.sync_state.read().clone();
++
++            // Allow events only when synced or backfilling (head is synced, just filling history)
++            let sync_ok = match &sync_state {
++                SyncState::Synced => true,
++                SyncState::BackFillSyncing { .. } => true,
++                SyncState::SyncingFinalized { .. } => {
++                    trace!("Skipping Xatu event - still syncing finalized chain");
++                    false
++                }
++                SyncState::SyncingHead { .. } => {
++                    trace!("Skipping Xatu event - still syncing head chain");
++                    false
++                }
++                SyncState::SyncTransition => {
++                    trace!("Skipping Xatu event - in sync transition");
++                    false
++                }
++                SyncState::Stalled => {
++                    trace!("Skipping Xatu event - sync stalled, no useful peers");
++                    false
++                }
++            };
++
++            if !sync_ok {
++                // Already logged specific reason above
++                return;
++            }
++
++            // Node is synced or backfilling, send events
++            trace!("Sending events to Xatu - sync state: {:?}", sync_state);
++            match &gossip_message {
++                PubsubMessage::BeaconBlock(block) => {
++                    if let ObserverResult::Error(e) = xatu_chain.on_gossip_block(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        block.clone(),
++                        timestamp_now(),
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing block: {}", e);
++                    }
++                }
++                PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => {
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_aggregate_and_proof(
++                        message_id.clone(),
++                        peer_id,
++                        aggregate_and_proof.clone().into(),
++                        timestamp_now(),
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing aggregate: {}", e);
++                    }
++                }
++                PubsubMessage::Attestation(subnet_attestation) => {
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_attestation(
++                        message_id.clone(),
++                        peer_id,
++                        Arc::new(subnet_attestation.1.clone()),
++                        subnet_attestation.0,
++                        should_process,
++                        timestamp_now(),
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing attestation: {}", e);
++                    }
++                }
++                PubsubMessage::BlobSidecar(data) => {
++                    let (blob_index, blob_sidecar) = &**data;
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_blob_sidecar(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        *blob_index,
++                        blob_sidecar.clone(),
++                        timestamp_now(),
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing blob sidecar: {}", e);
++                    }
++                }
++                PubsubMessage::DataColumnSidecar(data) => {
++                    let (subnet_id, column_sidecar) = &**data;
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_data_column_sidecar(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        *subnet_id,
++                        column_sidecar.clone(),
++                        timestamp_now(),
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing data column: {}", e);
++                    }
++                }
++                _ => {}
++            }
++        }
++
+         match gossip_message {
+             PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
+                 .handle_beacon_processor_send_result(
+                     self.network_beacon_processor.send_aggregated_attestation(
+-                        message_id,
++                        message_id.clone(),
+                         peer_id,
+                         *aggregate_and_proof,
+                         timestamp_now(),
+@@ -342,7 +473,7 @@ impl<T: BeaconChainTypes> Router<T> {
+             PubsubMessage::Attestation(subnet_attestation) => self
+                 .handle_beacon_processor_send_result(
+                     self.network_beacon_processor.send_unaggregated_attestation(
+-                        message_id,
++                        message_id.clone(),
+                         peer_id,
+                         subnet_attestation.1,
+                         subnet_attestation.0,
+@@ -363,7 +494,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 let (blob_index, blob_sidecar) = *data;
+                 self.handle_beacon_processor_send_result(
+                     self.network_beacon_processor.send_gossip_blob_sidecar(
+-                        message_id,
++                        message_id.clone(),
+                         peer_id,
+                         self.network_globals.client(&peer_id),
+                         blob_index,
+@@ -377,7 +508,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 self.handle_beacon_processor_send_result(
+                     self.network_beacon_processor
+                         .send_gossip_data_column_sidecar(
+-                            message_id,
++                            message_id.clone(),
+                             peer_id,
+                             self.network_globals.client(&peer_id),
+                             subnet_id,
+@@ -400,7 +531,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 );
+                 self.handle_beacon_processor_send_result(
+                     self.network_beacon_processor.send_gossip_proposer_slashing(
+-                        message_id,
++                        message_id.clone(),
+                         peer_id,
+                         proposer_slashing,
+                     ),
+@@ -413,7 +544,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 );
+                 self.handle_beacon_processor_send_result(
+                     self.network_beacon_processor.send_gossip_attester_slashing(
+-                        message_id,
++                        message_id.clone(),
+                         peer_id,
+                         attester_slashing,
+                     ),
+@@ -426,7 +557,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 );
+                 self.handle_beacon_processor_send_result(
+                     self.network_beacon_processor.send_gossip_sync_contribution(
+-                        message_id,
++                        message_id.clone(),
+                         peer_id,
+                         *contribution_and_proof,
+                         timestamp_now(),
+@@ -440,7 +571,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 );
+                 self.handle_beacon_processor_send_result(
+                     self.network_beacon_processor.send_gossip_sync_signature(
+-                        message_id,
++                        message_id.clone(),
+                         peer_id,
+                         sync_committtee_msg.1,
+                         sync_committtee_msg.0,
+@@ -456,7 +587,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 self.handle_beacon_processor_send_result(
+                     self.network_beacon_processor
+                         .send_gossip_light_client_finality_update(
+-                            message_id,
++                            message_id.clone(),
+                             peer_id,
+                             *light_client_finality_update,
+                             timestamp_now(),
+@@ -472,7 +603,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 self.handle_beacon_processor_send_result(
+                     self.network_beacon_processor
+                         .send_gossip_light_client_optimistic_update(
+-                            message_id,
++                            message_id.clone(),
+                             peer_id,
+                             *light_client_optimistic_update,
+                             timestamp_now(),
+@@ -483,7 +614,7 @@ impl<T: BeaconChainTypes> Router<T> {
+                 .handle_beacon_processor_send_result(
+                     self.network_beacon_processor
+                         .send_gossip_bls_to_execution_change(
+-                            message_id,
++                            message_id.clone(),
+                             peer_id,
+                             bls_to_execution_change,
+                         ),
+diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
+index f0414b6..c77feb4 100644
+--- a/beacon_node/network/src/service.rs
++++ b/beacon_node/network/src/service.rs
+@@ -40,6 +40,7 @@ use types::{
+     EthSpec, ForkContext, Slot, SubnetId, SyncCommitteeSubscription, SyncSubnetId, Unsigned,
+     ValidatorSubscription,
+ };
++use xatu;
+ 
+ mod tests;
+ 
+@@ -307,6 +308,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+ 
+         // launch derived network services
+ 
++        // Initialize Xatu middleware chain with chain spec and actual genesis time
++        let xatu_chain = xatu::init_with_chain_spec_and_genesis::<T::EthSpec>(
++            &beacon_chain.spec,
++            beacon_chain.genesis_time,
++        )
++        .unwrap_or_else(|e| {
++            panic!(
++                "FATAL: Failed to initialize Xatu - network info is required: {}",
++                e
++            );
++        });
++
+         // router task
+         let router_send = Router::spawn(
+             beacon_chain.clone(),
+@@ -316,6 +329,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+             invalid_block_storage,
+             beacon_processor_send,
+             fork_context.clone(),
++            xatu_chain,
+         )?;
+ 
+         // attestation and sync committee subnet service
+@@ -526,8 +540,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+             NetworkEvent::PubsubMessage {
+                 id,
+                 source,
++                topic,
+                 message,
+-                ..
++                message_size,
+             } => {
+                 match message {
+                     // attestation information gets processed in the attestation service
+@@ -543,14 +558,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+                         self.send_to_router(RouterMessage::PubsubMessage(
+                             id,
+                             source,
++                            topic,
+                             message,
++                            message_size,
+                             should_process,
+                         ));
+                     }
+                     _ => {
+                         // all else is sent to the router
+                         self.send_to_router(RouterMessage::PubsubMessage(
+-                            id, source, message, true,
++                            id,
++                            source,
++                            topic,
++                            message,
++                            message_size,
++                            true,
+                         ));
+                     }
+                 }
+diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
+index e583200..cd99aa8 100644
+--- a/beacon_node/src/cli.rs
++++ b/beacon_node/src/cli.rs
+@@ -241,6 +241,14 @@ pub fn cli_app() -> Command {
+                 .action(ArgAction::Set)
+                 .display_order(0)
+         )
++        .arg(
++            Arg::new("xatu-config")
++                .long("xatu-config")
++                .value_name("FILE")
++                .help("Path to a YAML configuration file for Xatu middleware. Xatu allows intercepting and modifying network messages for testing and debugging purposes.")
++                .action(ArgAction::Set)
++                .display_order(0)
++        )
+         .arg(
+             Arg::new("disable-upnp")
+                 .long("disable-upnp")
+diff --git a/lighthouse/build.rs b/lighthouse/build.rs
+index 3d8a25e..3167c5b 100644
+--- a/lighthouse/build.rs
++++ b/lighthouse/build.rs
+@@ -1,2 +1,6 @@
+ // This is a stub for determining the build profile, see `build_profile_name`.
+-fn main() {}
++fn main() {
++    // Set rpath so the binary can find libxatu.so in the same directory
++    println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
++    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
++}
+diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
+index 28b8c7b..829a93d 100644
+--- a/lighthouse/src/main.rs
++++ b/lighthouse/src/main.rs
+@@ -446,6 +446,13 @@ fn main() {
+ 
+     let matches = cli.get_matches();
+ 
++    // Set XATU_CONFIG environment variable early if xatu-config is provided
++    if let Some(("beacon_node", bn_matches)) = matches.subcommand() {
++        if let Some(xatu_config_path) = bn_matches.get_one::<String>("xatu-config") {
++            std::env::set_var("XATU_CONFIG", xatu_config_path);
++        }
++    }
++
+     // Configure the allocator early in the process, before it has the chance to use the default values for
+     // anything important.
+     //

@@ -1,0 +1,24 @@
+
+enabled: true
+
+name: "dimhouse-node"
+
+# Optional NTP server for time synchronization
+# ntpServer: "pool.ntp.org"
+
+# Optional ethereum configuration
+ethereum:
+  # Override the network name if needed (e.g., "mainnet", "sepolia", "holesky")
+  # overrideNetworkName: "mainnet"
+
+outputs:
+- name: xatu
+  type: xatu
+  config:
+    address: localhost:8080
+    tls: false
+    maxQueueSize: 500000
+    batchTimeout: 1s
+    exportTimeout: 15s
+    maxExportBatchSize: 1000
+    workers: 5
