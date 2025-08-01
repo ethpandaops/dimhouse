@@ -66,6 +66,37 @@ if [ -d "lighthouse" ]; then
             CURRENT_BRANCH=$(git branch --show-current)
             if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
                 echo "Branch mismatch: current=$CURRENT_BRANCH, expected=$BRANCH"
+                
+                # Check if directory is dirty before switching
+                if [ -d "xatu" ] || ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+                    echo "WARNING: Lighthouse directory has changes:"
+                    # Show xatu directory if it exists
+                    if [ -d "xatu" ]; then
+                        echo "  - xatu/ directory exists"
+                    fi
+                    # Show git status if there are changes
+                    if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+                        git status --short | head -20
+                        if [ $(git status --short | wc -l) -gt 20 ]; then
+                            echo "  ... and more files"
+                        fi
+                    fi
+                    echo ""
+                    read -p "Clean lighthouse directory before switching branches? (y/N) " -n 1 -r
+                    echo ""
+                    if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        echo "Cleaning lighthouse directory..."
+                        rm -rf xatu
+                        git reset --hard
+                        git clean -fd
+                        echo "Clean complete."
+                    else
+                        echo "Cannot switch branches with uncommitted changes. Exiting."
+                        cd ..
+                        exit 1
+                    fi
+                fi
+                
                 echo "Switching to branch $BRANCH..."
                 git fetch --depth 1 origin "$BRANCH":"$BRANCH"
                 git checkout "$BRANCH"
@@ -73,15 +104,21 @@ if [ -d "lighthouse" ]; then
             
             # Check if we're on the latest commit
             echo "Checking for updates..."
-            git fetch --depth 1
-            LOCAL=$(git rev-parse HEAD)
-            REMOTE=$(git rev-parse origin/"$BRANCH")
+            git fetch --depth 1 origin "$BRANCH" || true
             
-            if [ "$LOCAL" != "$REMOTE" ]; then
-                echo "Local branch is behind remote, pulling latest changes..."
-                git pull --depth 1
+            # Check if the remote branch exists in our refs
+            if git rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
+                LOCAL=$(git rev-parse HEAD)
+                REMOTE=$(git rev-parse "origin/$BRANCH")
+                
+                if [ "$LOCAL" != "$REMOTE" ]; then
+                    echo "Local branch is behind remote, pulling latest changes..."
+                    git pull --depth 1 origin "$BRANCH"
+                else
+                    echo "Already on latest commit"
+                fi
             else
-                echo "Already on latest commit"
+                echo "Remote branch not found in shallow clone, assuming up to date"
             fi
             
             cd ..
@@ -100,17 +137,8 @@ else
     git clone --depth 1 --branch "$BRANCH" "https://github.com/$ORG/$REPO.git" lighthouse
 fi
 
-# Check if diff file exists, otherwise use default
-DIFF_FILE="diffs/$ORG/$REPO/$BRANCH.diff"
-if [ ! -f "$DIFF_FILE" ]; then
-    echo "Diff file not found at $DIFF_FILE, using default..."
-    DIFF_FILE="diffs/sigp/lighthouse/unstable.diff"
-fi
-
-if [ ! -f "$DIFF_FILE" ]; then
-    echo "Error: No diff file found"
-    exit 1
-fi
+# Store the script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Check if lighthouse directory is dirty
 echo "Checking lighthouse directory status..."
@@ -142,14 +170,9 @@ if [ -d "xatu" ] || ! git diff --quiet || ! git diff --cached --quiet || [ -n "$
 fi
 cd ..
 
-echo "Applying diff from $DIFF_FILE..."
-cd lighthouse
-git apply ../"$DIFF_FILE"
-cd ..
-
-# Copy the xatu crate
-echo "Copying xatu crate..."
-cp -r crates/xatu lighthouse/
+# Apply the dimhouse patch (diff + xatu crate)
+echo "Applying dimhouse patch..."
+"$SCRIPT_DIR/apply-dimhouse-patch.sh" "$ORG/$REPO" "$BRANCH" lighthouse
 
 # Build the project
 echo "Building lighthouse..."
@@ -165,6 +188,7 @@ if cargo build --release; then
     echo "Generating new diff..."
     # Exclude xatu directory from the diff
     rm -rf xatu
+    git add -A
     git diff --cached > ../new.diff
     git reset
     cd ..
@@ -175,27 +199,36 @@ if cargo build --release; then
     
     TARGET_DIFF_FILE="$TARGET_DIFF_DIR/$BRANCH.diff"
     
-    # Compare diffs and update if different
-    if [ -f "$DIFF_FILE" ]; then
-        if ! diff -q "$DIFF_FILE" new.diff > /dev/null 2>&1; then
-            echo "Diff has changed from the original."
-            echo ""
-            read -p "Update the diff file at $TARGET_DIFF_FILE? (y/N) " -n 1 -r
-            echo ""
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                echo "Updating $TARGET_DIFF_FILE..."
-                cp new.diff "$TARGET_DIFF_FILE"
-                echo "Diff updated successfully!"
-            else
-                echo "Keeping original diff unchanged."
-            fi
-        else
-            echo "Diff has not changed."
-        fi
-    else
-        # First time creating this diff
+    # Find the diff file that was used (with fallback logic)
+    USED_DIFF_FILE="$SCRIPT_DIR/diffs/$ORG/$REPO/$BRANCH.diff"
+    if [ ! -f "$USED_DIFF_FILE" ]; then
+        USED_DIFF_FILE="$SCRIPT_DIR/diffs/sigp/lighthouse/unstable.diff"
+    fi
+    
+    # Check if target diff file already exists
+    if [ ! -f "$TARGET_DIFF_FILE" ]; then
+        # First time creating this diff for this branch
         echo "Creating new diff at $TARGET_DIFF_FILE..."
         cp new.diff "$TARGET_DIFF_FILE"
+    else
+        # Compare diffs and update if different
+        if [ -f "$USED_DIFF_FILE" ]; then
+            if ! diff -q "$USED_DIFF_FILE" new.diff > /dev/null 2>&1; then
+                echo "Diff has changed from the original."
+                echo ""
+                read -p "Update the diff file at $TARGET_DIFF_FILE? (y/N) " -n 1 -r
+                echo ""
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    echo "Updating $TARGET_DIFF_FILE..."
+                    cp new.diff "$TARGET_DIFF_FILE"
+                    echo "Diff updated successfully!"
+                else
+                    echo "Keeping original diff unchanged."
+                fi
+            else
+                echo "Diff has not changed."
+            fi
+        fi
     fi
     
     # Clean up temporary files
