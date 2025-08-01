@@ -11,14 +11,15 @@ index e63e218..3157193 100644
 +/xatu/src/libxatu.so
 +/xatu/src/libxatu.h
 diff --git a/Dockerfile b/Dockerfile
-index f925836..1ade934 100644
+index f925836..6551649 100644
 --- a/Dockerfile
 +++ b/Dockerfile
-@@ -16,3 +16,4 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
+@@ -16,3 +16,5 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
    && apt-get clean \
    && rm -rf /var/lib/apt/lists/*
  COPY --from=builder /usr/local/cargo/bin/lighthouse /usr/local/bin/lighthouse
-+COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/bin/libxatu.so
++ENV LD_LIBRARY_PATH=/usr/local/lib
++COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
 diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
 index 456376e..4698202 100644
 --- a/beacon_node/Cargo.toml
@@ -472,7 +473,7 @@ index 3d8a25e..3167c5b 100644
 +    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 28b8c7b..829a93d 100644
+index 59ec1a8..ade8f1f 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
 @@ -446,6 +446,13 @@ fn main() {
