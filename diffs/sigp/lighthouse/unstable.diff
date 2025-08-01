@@ -10,6 +10,15 @@ index e63e218..3157193 100644
 +# Xatu build artifacts
 +/xatu/src/libxatu.so
 +/xatu/src/libxatu.h
+diff --git a/Dockerfile b/Dockerfile
+index f925836..1ade934 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -16,3 +16,4 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
+   && apt-get clean \
+   && rm -rf /var/lib/apt/lists/*
+ COPY --from=builder /usr/local/cargo/bin/lighthouse /usr/local/bin/lighthouse
++COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/bin/libxatu.so
 diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
 index 456376e..4698202 100644
 --- a/beacon_node/Cargo.toml
