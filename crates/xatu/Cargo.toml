@@ -1,0 +1,37 @@
+[package]
+name = "xatu"
+version = "0.1.0"
+edition = "2021"
+authors = ["ethpandaops"]
+description = "FFI-based event exporter for Lighthouse network events"
+
+[dependencies]
+# Core dependencies
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+hex = "0.4"
+chrono = "0.4"
+
+# Network dependencies
+libp2p = { version = "0.54" }
+
+# Lighthouse dependencies
+lighthouse_network = { path = "../beacon_node/lighthouse_network" }
+types = { path = "../consensus/types" }
+tree_hash = "0.10"
+metrics = { path = "../common/metrics" }
+
+# Logging
+tracing = "0.1"
+
+# For atomics
+tokio = { version = "1", features = ["sync"] }
+
+# For thread-safe channels
+crossbeam-channel = "0.5"
+
+[build-dependencies]
+ureq = "2.9"
+tar = "0.4"
+flate2 = "1.0"
