@@ -84,10 +84,6 @@ if [ -d "lighthouse" ]; then
                 echo "Already on latest commit"
             fi
             
-            # Clean any local changes
-            echo "Cleaning local changes..."
-            git reset --hard
-            git clean -fd
             cd ..
         fi
     else
@@ -116,6 +112,37 @@ if [ ! -f "$DIFF_FILE" ]; then
     exit 1
 fi
 
+# Check if lighthouse directory is dirty
+echo "Checking lighthouse directory status..."
+cd lighthouse
+if [ -d "xatu" ] || ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    echo "WARNING: Lighthouse directory has changes:"
+    # Show xatu directory if it exists
+    if [ -d "xatu" ]; then
+        echo "  - xatu/ directory exists"
+    fi
+    # Show git status if there are changes
+    if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+        git status --short | head -20
+        if [ $(git status --short | wc -l) -gt 20 ]; then
+            echo "  ... and more files"
+        fi
+    fi
+    echo ""
+    read -p "Clean lighthouse directory before continuing? (y/N) " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Cleaning lighthouse directory..."
+        rm -rf xatu
+        git reset --hard
+        git clean -fdx
+        echo "Clean complete."
+    else
+        echo "Continuing without cleaning..."
+    fi
+fi
+cd ..
+
 echo "Applying diff from $DIFF_FILE..."
 cd lighthouse
 git apply ../"$DIFF_FILE"
@@ -125,14 +152,15 @@ cd ..
 echo "Copying xatu crate..."
 cp -r crates/xatu lighthouse/
 
-# Add Cargo.lock to gitignore in lighthouse directory
-echo "Cargo.lock" >> lighthouse/.gitignore
-
 # Build the project
 echo "Building lighthouse..."
 cd lighthouse
 if cargo build --release; then
     echo "Build completed successfully!"
+    
+    # Reset Cargo.lock to original state before creating diff
+    echo "Resetting Cargo.lock to original state..."
+    git checkout HEAD -- Cargo.lock
     
     # Generate new diff
     echo "Generating new diff..."
@@ -148,34 +176,29 @@ if cargo build --release; then
     
     # Compare diffs and update if different
     if [ -f "$DIFF_FILE" ]; then
-        # Compare diffs excluding Cargo.lock lines
-        # Use git diff with pathspec to exclude Cargo.lock
-        cd lighthouse
-        git add -A
-        git reset -- Cargo.lock  # Unstage Cargo.lock
-        git diff --cached > ../new_filtered.diff
-        cd ..
-        
-        if ! diff -q "$DIFF_FILE" new_filtered.diff > /dev/null 2>&1; then
-            echo "Diff has changed, updating $TARGET_DIFF_FILE..."
-            cp new_filtered.diff "$TARGET_DIFF_FILE"
-            echo "Diff updated successfully!"
+        if ! diff -q "$DIFF_FILE" new.diff > /dev/null 2>&1; then
+            echo "Diff has changed from the original."
+            echo ""
+            read -p "Update the diff file at $TARGET_DIFF_FILE? (y/N) " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo "Updating $TARGET_DIFF_FILE..."
+                cp new.diff "$TARGET_DIFF_FILE"
+                echo "Diff updated successfully!"
+            else
+                echo "Keeping original diff unchanged."
+            fi
         else
             echo "Diff has not changed."
         fi
-        
-        # Clean up temporary files
-        rm -f new_filtered.diff new.diff
     else
         # First time creating this diff
         echo "Creating new diff at $TARGET_DIFF_FILE..."
-        cd lighthouse
-        git add -A
-        git reset -- Cargo.lock  # Unstage Cargo.lock
-        git diff --cached > "../$TARGET_DIFF_FILE"
-        cd ..
-        rm -f new.diff
+        cp new.diff "$TARGET_DIFF_FILE"
     fi
+    
+    # Clean up temporary files
+    rm -f new.diff
 else
     echo "Build failed!"
     exit 1
