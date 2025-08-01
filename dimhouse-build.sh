@@ -135,7 +135,6 @@ if [ -d "xatu" ] || ! git diff --quiet || ! git diff --cached --quiet || [ -n "$
         echo "Cleaning lighthouse directory..."
         rm -rf xatu
         git reset --hard
-        git clean -fdx
         echo "Clean complete."
     else
         echo "Continuing without cleaning..."
@@ -160,12 +159,14 @@ if cargo build --release; then
     
     # Reset Cargo.lock to original state before creating diff
     echo "Resetting Cargo.lock to original state..."
-    git checkout HEAD -- Cargo.lock
+    git checkout Cargo.lock
     
     # Generate new diff
     echo "Generating new diff..."
-    git add -A
+    # Exclude xatu directory from the diff
+    rm -rf xatu
     git diff --cached > ../new.diff
+    git reset
     cd ..
     
     # Ensure target directory exists
