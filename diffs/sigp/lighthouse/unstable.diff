@@ -1,18 +1,8 @@
 diff --git a/.gitignore b/.gitignore
-index e63e218..b7d529a 100644
+index e63e218..3157193 100644
 --- a/.gitignore
 +++ b/.gitignore
-@@ -12,9 +12,17 @@ genesis.ssz
- /clippy.toml
- /.cargo
- 
-+# Downloaded xatu-sidecar library
-+/xatu/src/libxatu.so
-+/xatu/src/libxatu.dylib
-+
- # IntelliJ
- /*.iml
- .idea
+@@ -18,3 +18,7 @@ genesis.ssz
  
  # VSCode
  /.vscode
@@ -164,7 +154,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 5d5daae..f3f5764 100644
+index 5d5daae..8e52526 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -14,7 +14,9 @@ use beacon_processor::{BeaconProcessorSend, DuplicateCache};
@@ -248,7 +238,7 @@ index 5d5daae..f3f5764 100644
              }
          }
      }
-@@ -326,14 +347,124 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -326,9 +347,119 @@ impl<T: BeaconChainTypes> Router<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -368,102 +358,6 @@ index 5d5daae..f3f5764 100644
          match gossip_message {
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
-                     self.network_beacon_processor.send_aggregated_attestation(
--                        message_id,
-+                        message_id.clone(),
-                         peer_id,
-                         *aggregate_and_proof,
-                         timestamp_now(),
-@@ -342,7 +473,7 @@ impl<T: BeaconChainTypes> Router<T> {
-             PubsubMessage::Attestation(subnet_attestation) => self
-                 .handle_beacon_processor_send_result(
-                     self.network_beacon_processor.send_unaggregated_attestation(
--                        message_id,
-+                        message_id.clone(),
-                         peer_id,
-                         subnet_attestation.1,
-                         subnet_attestation.0,
-@@ -363,7 +494,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 let (blob_index, blob_sidecar) = *data;
-                 self.handle_beacon_processor_send_result(
-                     self.network_beacon_processor.send_gossip_blob_sidecar(
--                        message_id,
-+                        message_id.clone(),
-                         peer_id,
-                         self.network_globals.client(&peer_id),
-                         blob_index,
-@@ -377,7 +508,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 self.handle_beacon_processor_send_result(
-                     self.network_beacon_processor
-                         .send_gossip_data_column_sidecar(
--                            message_id,
-+                            message_id.clone(),
-                             peer_id,
-                             self.network_globals.client(&peer_id),
-                             subnet_id,
-@@ -400,7 +531,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 );
-                 self.handle_beacon_processor_send_result(
-                     self.network_beacon_processor.send_gossip_proposer_slashing(
--                        message_id,
-+                        message_id.clone(),
-                         peer_id,
-                         proposer_slashing,
-                     ),
-@@ -413,7 +544,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 );
-                 self.handle_beacon_processor_send_result(
-                     self.network_beacon_processor.send_gossip_attester_slashing(
--                        message_id,
-+                        message_id.clone(),
-                         peer_id,
-                         attester_slashing,
-                     ),
-@@ -426,7 +557,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 );
-                 self.handle_beacon_processor_send_result(
-                     self.network_beacon_processor.send_gossip_sync_contribution(
--                        message_id,
-+                        message_id.clone(),
-                         peer_id,
-                         *contribution_and_proof,
-                         timestamp_now(),
-@@ -440,7 +571,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 );
-                 self.handle_beacon_processor_send_result(
-                     self.network_beacon_processor.send_gossip_sync_signature(
--                        message_id,
-+                        message_id.clone(),
-                         peer_id,
-                         sync_committtee_msg.1,
-                         sync_committtee_msg.0,
-@@ -456,7 +587,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 self.handle_beacon_processor_send_result(
-                     self.network_beacon_processor
-                         .send_gossip_light_client_finality_update(
--                            message_id,
-+                            message_id.clone(),
-                             peer_id,
-                             *light_client_finality_update,
-                             timestamp_now(),
-@@ -472,7 +603,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 self.handle_beacon_processor_send_result(
-                     self.network_beacon_processor
-                         .send_gossip_light_client_optimistic_update(
--                            message_id,
-+                            message_id.clone(),
-                             peer_id,
-                             *light_client_optimistic_update,
-                             timestamp_now(),
-@@ -483,7 +614,7 @@ impl<T: BeaconChainTypes> Router<T> {
-                 .handle_beacon_processor_send_result(
-                     self.network_beacon_processor
-                         .send_gossip_bls_to_execution_change(
--                            message_id,
-+                            message_id.clone(),
-                             peer_id,
-                             bls_to_execution_change,
-                         ),
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
 index f0414b6..c77feb4 100644
 --- a/beacon_node/network/src/service.rs
