@@ -6,6 +6,7 @@ set -e
 ORG=""
 REPO=""
 BRANCH=""
+CI_MODE=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -24,9 +25,14 @@ while [[ $# -gt 0 ]]; do
             BRANCH="$2"
             shift 2
             ;;
+        --ci)
+            CI_MODE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 -r org/repo -b branch"
+            echo "Usage: $0 -r org/repo -b branch [--ci]"
+            echo "  --ci: Run in CI mode (non-interactive, auto-clean, auto-update patches)"
             exit 1
             ;;
     esac
@@ -35,8 +41,9 @@ done
 # Validate required arguments
 if [ -z "$ORG" ] || [ -z "$REPO" ] || [ -z "$BRANCH" ]; then
     echo "Error: Missing required arguments"
-    echo "Usage: $0 -r org/repo -b branch"
+    echo "Usage: $0 -r org/repo -b branch [--ci]"
     echo "Example: $0 -r sigp/lighthouse -b unstable"
+    echo "         $0 -r sigp/lighthouse -b unstable --ci"
     exit 1
 fi
 
@@ -82,8 +89,13 @@ if [ -d "lighthouse" ]; then
                         fi
                     fi
                     echo ""
-                    read -p "Clean lighthouse directory before switching branches? (y/N) " -n 1 -r
-                    echo ""
+                    if [ "$CI_MODE" = true ]; then
+                        echo "CI mode: Auto-cleaning lighthouse directory..."
+                        REPLY="y"
+                    else
+                        read -p "Clean lighthouse directory before switching branches? (y/N) " -n 1 -r
+                        echo ""
+                    fi
                     if [[ $REPLY =~ ^[Yy]$ ]]; then
                         echo "Cleaning lighthouse directory..."
                         rm -rf xatu
@@ -157,8 +169,13 @@ if [ -d "xatu" ] || ! git diff --quiet || ! git diff --cached --quiet || [ -n "$
         fi
     fi
     echo ""
-    read -p "Clean lighthouse directory before continuing? (y/N) " -n 1 -r
-    echo ""
+    if [ "$CI_MODE" = true ]; then
+        echo "CI mode: Auto-cleaning lighthouse directory..."
+        REPLY="y"
+    else
+        read -p "Clean lighthouse directory before continuing? (y/N) " -n 1 -r
+        echo ""
+    fi
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Cleaning lighthouse directory..."
         rm -rf xatu
@@ -170,7 +187,7 @@ if [ -d "xatu" ] || ! git diff --quiet || ! git diff --cached --quiet || [ -n "$
 fi
 cd ..
 
-# Apply the dimhouse patch (diff + xatu crate)
+# Apply the dimhouse patch (patch file + xatu crate)
 echo "Applying dimhouse patch..."
 "$SCRIPT_DIR/apply-dimhouse-patch.sh" "$ORG/$REPO" "$BRANCH" lighthouse
 
@@ -184,55 +201,60 @@ if cargo build --release; then
     echo "Resetting Cargo.lock to original state..."
     git checkout Cargo.lock
     
-    # Generate new diff
-    echo "Generating new diff..."
-    # Exclude xatu directory from the diff
+    # Generate new patch
+    echo "Generating new patch..."
+    # Exclude xatu directory from the patch
     rm -rf xatu
     git add -A
-    git diff --cached > ../new.diff
+    git diff --cached > ../new.patch
     git reset
     cd ..
     
     # Ensure target directory exists
-    TARGET_DIFF_DIR="diffs/$ORG/$REPO"
-    mkdir -p "$TARGET_DIFF_DIR"
+    TARGET_PATCH_DIR="patches/$ORG/$REPO"
+    mkdir -p "$TARGET_PATCH_DIR"
     
-    TARGET_DIFF_FILE="$TARGET_DIFF_DIR/$BRANCH.diff"
+    TARGET_PATCH_FILE="$TARGET_PATCH_DIR/$BRANCH.patch"
     
-    # Find the diff file that was used (with fallback logic)
-    USED_DIFF_FILE="$SCRIPT_DIR/diffs/$ORG/$REPO/$BRANCH.diff"
-    if [ ! -f "$USED_DIFF_FILE" ]; then
-        USED_DIFF_FILE="$SCRIPT_DIR/diffs/sigp/lighthouse/unstable.diff"
+    # Find the patch file that was used (with fallback logic)
+    USED_PATCH_FILE="$SCRIPT_DIR/patches/$ORG/$REPO/$BRANCH.patch"
+    if [ ! -f "$USED_PATCH_FILE" ]; then
+        USED_PATCH_FILE="$SCRIPT_DIR/patches/sigp/lighthouse/unstable.patch"
     fi
     
-    # Check if target diff file already exists
-    if [ ! -f "$TARGET_DIFF_FILE" ]; then
-        # First time creating this diff for this branch
-        echo "Creating new diff at $TARGET_DIFF_FILE..."
-        cp new.diff "$TARGET_DIFF_FILE"
+    # Check if target patch file already exists
+    if [ ! -f "$TARGET_PATCH_FILE" ]; then
+        # First time creating this patch for this branch
+        echo "Creating new patch at $TARGET_PATCH_FILE..."
+        cp new.patch "$TARGET_PATCH_FILE"
     else
-        # Compare diffs and update if different
-        if [ -f "$USED_DIFF_FILE" ]; then
-            if ! diff -q "$USED_DIFF_FILE" new.diff > /dev/null 2>&1; then
-                echo "Diff has changed from the original."
+        # Compare patches and update if different
+        if [ -f "$USED_PATCH_FILE" ]; then
+            if ! diff -q "$USED_PATCH_FILE" new.patch > /dev/null 2>&1; then
+                echo "Patch has changed from the original."
                 echo ""
-                read -p "Update the diff file at $TARGET_DIFF_FILE? (y/N) " -n 1 -r
-                echo ""
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    echo "Updating $TARGET_DIFF_FILE..."
-                    cp new.diff "$TARGET_DIFF_FILE"
-                    echo "Diff updated successfully!"
+                if [ "$CI_MODE" = true ]; then
+                    echo "CI mode: Auto-updating patch file..."
+                    REPLY="y"
                 else
-                    echo "Keeping original diff unchanged."
+                    read -p "Update the patch file at $TARGET_PATCH_FILE? (y/N) " -n 1 -r
+                    echo ""
+                fi
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    echo "Updating $TARGET_PATCH_FILE..."
+                    cp new.patch "$TARGET_PATCH_FILE"
+                    echo "Patch updated successfully!"
+                else
+                    echo "Keeping original patch unchanged."
                 fi
             else
-                echo "Diff has not changed."
+                echo "Patch has not changed."
             fi
         fi
     fi
     
     # Clean up temporary files
-    rm -f new.diff
+    rm -f new.patch
 else
     echo "Build failed!"
     exit 1

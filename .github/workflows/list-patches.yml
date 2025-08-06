@@ -1,0 +1,47 @@
+name: List Available Patches
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'patches/**/*.patch'
+
+jobs:
+  list-patches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: List all patches
+        run: |
+          echo "## Available Patches" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Organization | Repository | Reference | Patch File | Last Modified |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------------|------------|-----------|------------|---------------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Find all patch files
+          find patches -name "*.patch" -type f | sort | while read patch; do
+            # Extract org/repo/ref from path
+            path_parts=$(echo "$patch" | sed 's|^patches/||; s|\.patch$||')
+            org=$(echo "$path_parts" | cut -d'/' -f1)
+            repo=$(echo "$path_parts" | cut -d'/' -f2)
+            ref=$(echo "$path_parts" | cut -d'/' -f3-)
+            
+            # Get last modified date
+            last_modified=$(git log -1 --format="%ai" -- "$patch" 2>/dev/null || echo "Unknown")
+            
+            # Add to summary table
+            echo "| $org | $repo | $ref | \`$patch\` | $last_modified |" >> $GITHUB_STEP_SUMMARY
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage" >> $GITHUB_STEP_SUMMARY
+          echo "To apply a patch, use:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "./apply-dimhouse-patch.sh <org>/<repo> <ref>" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To build with a patch, use:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "./dimhouse-build.sh -r <org>/<repo> -b <ref>" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

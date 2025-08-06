@@ -15,10 +15,10 @@ Dimhouse allows you to:
 ```
 ├── crates/                    # Source crates to be integrated
 │   └── xatu/                  # Xatu observability crate
-├── diffs/                     # Patch files organized by org/repo/branch
+├── patches/                   # Patch files organized by org/repo/branch
 │   └── sigp/
 │       └── lighthouse/
-│           └── unstable.diff  # Default patch for Lighthouse
+│           └── unstable.patch # Default patch for Lighthouse
 ├── dimhouse-build.sh          # Main build script
 ├── apply-dimhouse-patch.sh    # Helper script to apply patches
 └── example-xatu-config.yaml   # Xatu configuration file
@@ -28,7 +28,7 @@ Dimhouse allows you to:
 
 ### dimhouse-build.sh
 
-Main build script that handles the full workflow: clone, patch, build, and update diffs.
+Main build script that handles the full workflow: clone, patch, build, and update patches.
 
 ```bash
 # Usage
@@ -52,13 +52,13 @@ Helper script to apply patches to a repository.
 ./apply-dimhouse-patch.sh sigp/lighthouse unstable /path/to/lighthouse
 ```
 
-## Diff Management
+## Patch Management
 
-Diffs are stored in `diffs/<org>/<repo>/<branch>.diff`. The system uses a fallback mechanism:
-- First tries to find a branch-specific diff
-- Falls back to `diffs/sigp/lighthouse/unstable.diff` if not found
+Patches are stored in `patches/<org>/<repo>/<branch>.patch`. The system uses a fallback mechanism:
+- First tries to find a branch-specific patch
+- Falls back to `patches/sigp/lighthouse/unstable.patch` if not found
 
-When working with a new branch for the first time, the script will create a new diff file specific to that branch after a successful build.
+When working with a new branch for the first time, the script will create a new patch file specific to that branch after a successful build.
 
 ## Configuration
 
@@ -73,5 +73,5 @@ The `example-xatu-config.yaml` file contains configuration for the Xatu middlewa
 ## Notes
 
 - The `lighthouse/` directory is git-ignored and used as a working directory
-- Patches automatically exclude the xatu crate directory from diffs (since it's copied separately)
-- Cargo.lock changes are excluded from diffs to avoid conflicts
+- Patches automatically exclude the xatu crate directory from generated patches (since it's copied separately)
+- Cargo.lock changes are excluded from generated patches to avoid conflicts
