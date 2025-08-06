@@ -2,7 +2,7 @@
 
 set -e
 
-# This script applies the dimhouse patch (xatu crate + diff) to a repository
+# This script applies the dimhouse patch (xatu crate + patch file) to a repository
 # Usage: ./apply-dimhouse-patch.sh <org/repo> <branch> [target_dir]
 
 if [ $# -lt 2 ]; then
@@ -23,7 +23,7 @@ REPO="${REPO_PARTS[1]}"
 BRANCH="$2"
 TARGET_DIR="${3:-lighthouse}"  # Default to "lighthouse" if not specified
 
-# Get the script's directory (where diffs/ and crates/ are located)
+# Get the script's directory (where patches/ and crates/ are located)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Change to target directory
@@ -40,47 +40,47 @@ if [ ! -d ".git" ]; then
     exit 1
 fi
 
-# Find the appropriate diff file with fallback logic
-find_diff_file() {
+# Find the appropriate patch file with fallback logic
+find_patch_file() {
     local org="$1"
     local repo="$2"
     local branch="$3"
     
     # Try exact match first
-    local exact_diff="$SCRIPT_DIR/diffs/$org/$repo/$branch.diff"
-    if [ -f "$exact_diff" ]; then
-        echo "$exact_diff"
+    local exact_patch="$SCRIPT_DIR/patches/$org/$repo/$branch.patch"
+    if [ -f "$exact_patch" ]; then
+        echo "$exact_patch"
         return 0
     fi
     
     # Fallback to default
-    local default_diff="$SCRIPT_DIR/diffs/sigp/lighthouse/unstable.diff"
-    if [ -f "$default_diff" ]; then
-        echo "Diff file not found at diffs/$org/$repo/$branch.diff, using default..." >&2
-        echo "$default_diff"
+    local default_patch="$SCRIPT_DIR/patches/sigp/lighthouse/unstable.patch"
+    if [ -f "$default_patch" ]; then
+        echo "Patch file not found at patches/$org/$repo/$branch.patch, using default..." >&2
+        echo "$default_patch"
         return 0
     fi
     
     return 1
 }
 
-# Find the diff file
-DIFF_FILE=$(find_diff_file "$ORG" "$REPO" "$BRANCH")
-if [ -z "$DIFF_FILE" ]; then
-    echo "Error: No diff file found"
+# Find the patch file
+PATCH_FILE=$(find_patch_file "$ORG" "$REPO" "$BRANCH")
+if [ -z "$PATCH_FILE" ]; then
+    echo "Error: No patch file found"
     exit 1
 fi
 
-echo "Using diff file: $DIFF_FILE"
+echo "Using patch file: $PATCH_FILE"
 
-# Apply the diff
-echo "Applying diff..."
-if ! git apply "$DIFF_FILE"; then
-    echo "Error: Failed to apply diff"
+# Apply the patch
+echo "Applying patch..."
+if ! git apply "$PATCH_FILE"; then
+    echo "Error: Failed to apply patch"
     echo "This might happen if:"
-    echo "  - The diff is already applied"
+    echo "  - The patch is already applied"
     echo "  - The repository is not clean"
-    echo "  - The diff is incompatible with the current branch"
+    echo "  - The patch is incompatible with the current branch"
     exit 1
 fi
 
@@ -94,5 +94,5 @@ fi
 cp -r "$SCRIPT_DIR/crates/xatu" .
 
 echo "Successfully applied dimhouse patch!"
-echo "  - Applied diff: $DIFF_FILE"
+echo "  - Applied patch: $PATCH_FILE"
 echo "  - Copied xatu crate to: $(pwd)/xatu"
