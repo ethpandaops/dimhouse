@@ -144,7 +144,17 @@ Each release includes:
 
 ## Configuration
 
-The `example-xatu-config.yaml` file contains configuration for the Xatu Sidecar. This file is referenced by the environment variable `XATU_CONFIG` when running the patched Lighthouse binary with Xatu Sidecar integration.
+The [`example-xatu-config.yaml`](example-xatu-config.yaml) file contains configuration for the Xatu Sidecar. This file is referenced by the environment variable `XATU_CONFIG` when running the patched Lighthouse binary with Xatu Sidecar integration.
+
+### Running the Dimhouse-built Client
+
+To run the Lighthouse client built with Dimhouse patches and enable Xatu Sidecar observability:
+
+```bash
+lighthouse beacon_node --xatu-config /path/to/xatu-config.yaml [other options]
+```
+
+The configuration file should be based on [`example-xatu-config.yaml`](example-xatu-config.yaml) and customized for your deployment needs.
 
 ## Requirements
 
@@ -159,37 +169,6 @@ The `example-xatu-config.yaml` file contains configuration for the Xatu Sidecar.
 - Patches automatically exclude the xatu crate directory (it's copied separately)
 - Cargo.lock changes are excluded from patches to avoid conflicts
 - CI mode (`--ci`) enables fully automated operation without user prompts
-
-## Usage Examples
-
-### Local Development
-
-```bash
-# Build Lighthouse unstable with patches
-./dimhouse-build.sh -r sigp/lighthouse -b unstable
-
-# Apply patch to existing clone
-cd /path/to/lighthouse
-../dimhouse/apply-dimhouse-patch.sh sigp/lighthouse unstable .
-```
-
-### Adding Support for New Versions
-
-```bash
-# Build and create patch for a specific tag
-./dimhouse-build.sh -r sigp/lighthouse -b v4.5.0
-
-# Build and create patch for a specific commit
-./dimhouse-build.sh -r sigp/lighthouse -b a1b2c3d
-```
-
-### CI/CD Integration
-
-The GitHub Actions workflows handle:
-- Daily patch updates for all tracked versions
-- Manual patch addition through the UI
-- Automatic release creation with proper versioning
-- Patch inventory maintenance
 
 ## Contributing
 
