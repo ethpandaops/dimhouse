@@ -1,0 +1,38 @@
+participants_matrix:
+  el:
+    - el_type: geth
+      el_image: ethpandaops/geth:fusaka-devnet-3
+  cl:
+    - cl_type: lighthouse
+      cl_image: ethpandaops/lighthouse:fusaka-devnet-3-xatu-sidecar
+      cl_extra_params:
+        - --xatu-config=/etc/dimhouse/xatu-config.yaml
+      cl_extra_mounts:
+        "/etc/dimhouse": "static_files/dimhouse"
+      vc_type: lighthouse
+      vc_image: ethpandaops/lighthouse:fusaka-devnet-3-xatu-sidecar
+    - cl_type: teku
+      cl_image: ethpandaops/teku:fusaka-devnet-3
+    - cl_type: lodestar
+      cl_image: ethpandaops/lodestar:fusaka-devnet-3
+global_log_level: info
+ethereum_metrics_exporter_enabled: true
+snooper_enabled: true
+keymanager_enabled: true
+additional_services:
+  - dora
+  - spamoor
+spamoor_params:
+  spammers:
+    - scenario: blobs
+      config:
+        throughput: 20
+network_params:
+  electra_fork_epoch: 1
+  fulu_fork_epoch: 2
+  min_validator_withdrawability_delay: 1
+  shard_committee_period: 1
+  churn_limit_quotient: 16
+  genesis_delay: 60
+  prefunded_accounts: '{"0x980538dCae7f43C699d4EEce0ab1068b82df982A": {"balance": "10ETH"}}'
+apache_port: 40000
