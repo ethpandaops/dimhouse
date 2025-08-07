@@ -196,3 +196,4 @@ cp example-xatu-config.yaml ethereum-package/static_files/dimhouse/xatu-config.y
 
 # run the kurtosis stack
 kurtosis run ./ethereum-package --args-file ./kurtosis-config.yaml
+```
