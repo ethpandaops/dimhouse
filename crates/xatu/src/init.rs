@@ -108,13 +108,7 @@ pub fn init_with_chain_spec_and_genesis<E: EthSpec>(
     let network_info = NetworkInfo {
         genesis_time: genesis_time,
         network_name: network_name.clone(),
-        network_id: match network_name.as_str() {
-            "mainnet" => 1,
-            "goerli" => 5,
-            "sepolia" => 11155111,
-            "holesky" => 17000,
-            _ => 0, // Unknown network
-        },
+        network_id: spec.deposit_network_id,
         slots_per_epoch: E::slots_per_epoch(),
         seconds_per_slot: spec.seconds_per_slot,
     };
