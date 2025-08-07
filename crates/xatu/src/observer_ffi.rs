@@ -583,7 +583,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         message_id: MessageId,
         peer_id: PeerId,
         client: Option<String>,
-        subnet_id: DataColumnSubnetId,
+        _subnet_id: DataColumnSubnetId,
         column_sidecar: Arc<DataColumnSidecar<E>>,
         timestamp_millis: u64,
         topic: String,
@@ -591,11 +591,13 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
     ) -> ObserverResult {
         let block_root = column_sidecar.block_root();
         let slot = column_sidecar.slot();
+        let column_index = column_sidecar.index;
+        let kzg_commitments_count = column_sidecar.kzg_commitments.len() as u32;
 
         debug!(
-            "Xatu FFI: Received gossip data column sidecar - slot: {}, subnet: {}, root: 0x{}, message_id: {:?}",
+            "Xatu FFI: Received gossip data column sidecar - slot: {}, column_index: {}, root: 0x{}, message_id: {:?}",
             slot,
-            subnet_id,
+            column_index,
             hex::encode(&block_root.0[..8]),
             message_id
         );
@@ -632,7 +634,8 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
                 hex::encode(column_sidecar.signed_block_header.message.state_root.0)
             ),
             proposer_index: column_sidecar.block_proposer_index(),
-            subnet_id: u64::from(subnet_id),
+            column_index,
+            kzg_commitments_count,
             timestamp_ms: timestamp_millis as i64,
             message_id: hex::encode(&message_id.0),
             client,
@@ -641,8 +644,8 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         };
 
         debug!(
-            "Xatu FFI: Processing data column sidecar event - slot: {}, subnet: {}, peer: {}",
-            slot, subnet_id, peer_id
+            "Xatu FFI: Processing data column sidecar event - slot: {}, column_index: {}, peer: {}",
+            slot, column_index, peer_id
         );
 
         if let Some(sender) = &self.event_sender {
@@ -650,8 +653,8 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
                 error!("Failed to queue data column sidecar event: {:?}", e);
             } else {
                 debug!(
-                    "Queued data column sidecar event for slot {} subnet {}",
-                    slot, subnet_id
+                    "Queued data column sidecar event for slot {} column_index {}",
+                    slot, column_index
                 );
             }
         }
