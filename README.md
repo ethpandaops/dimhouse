@@ -181,3 +181,18 @@ Patches should be tested to ensure they:
 - Apply cleanly to the target version
 - Build successfully
 - Maintain the intended Xatu Sidecar integration functionality
+
+## Testing
+
+Can be tested with Kurtosis.
+
+```bash
+# get the ethereum-package repo
+git clone git@github.com:ethpandaops/ethereum-package.git
+
+# copy the config
+# NOTE: you might want to change the xatu output to your host ip as kurtosis will run in a container
+cp example-xatu-config.yaml ethereum-package/static_files/dimhouse/xatu-config.yaml
+
+# run the kurtosis stack
+kurtosis run ./ethereum-package --args-file ./kurtosis-config.yaml
