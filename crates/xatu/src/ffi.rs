@@ -102,7 +102,8 @@ pub enum EventData {
         parent_root: String,
         state_root: String,
         proposer_index: u64,
-        subnet_id: u64,
+        column_index: u64,
+        kzg_commitments_count: u32,
         timestamp_ms: i64,
         message_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
