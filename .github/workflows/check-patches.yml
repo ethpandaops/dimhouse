@@ -54,7 +54,7 @@ jobs:
           toolchain: stable
       
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -89,7 +89,7 @@ jobs:
       
       - name: Upload updated patch as artifact
         if: steps.build.outputs.patch_changed == 'true'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: patch-${{ matrix.org }}-${{ matrix.repo }}-${{ matrix.branch }}
           path: ${{ matrix.patch_file }}
@@ -108,7 +108,7 @@ jobs:
       
       - name: Upload patch metadata
         if: steps.build.outputs.patch_changed == 'true'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: metadata-${{ matrix.org }}-${{ matrix.repo }}-${{ matrix.branch }}
           path: patch-metadata/${{ matrix.org }}-${{ matrix.repo }}-${{ matrix.branch }}.json
@@ -123,7 +123,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Download all patch artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
       
