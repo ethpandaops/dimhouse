@@ -196,65 +196,39 @@ echo "Building lighthouse..."
 cd lighthouse
 if cargo build --release; then
     echo "Build completed successfully!"
-    
-    # Reset Cargo.lock to original state before creating diff
-    echo "Resetting Cargo.lock to original state..."
-    git checkout Cargo.lock
-    
-    # Generate new patch
-    echo "Generating new patch..."
-    # Exclude xatu directory from the patch
-    rm -rf xatu
-    git add -A
-    git diff --cached > ../new.patch
-    git reset
     cd ..
     
-    # Ensure target directory exists
-    TARGET_PATCH_DIR="patches/$ORG/$REPO"
-    mkdir -p "$TARGET_PATCH_DIR"
+    echo ""
+    echo "Generating patch from build changes..."
     
-    TARGET_PATCH_FILE="$TARGET_PATCH_DIR/$BRANCH.patch"
-    
-    # Find the patch file that was used (with fallback logic)
-    USED_PATCH_FILE="$SCRIPT_DIR/patches/$ORG/$REPO/$BRANCH.patch"
-    if [ ! -f "$USED_PATCH_FILE" ]; then
-        USED_PATCH_FILE="$SCRIPT_DIR/patches/sigp/lighthouse/unstable.patch"
+    # Use save-patch.sh to generate the patch
+    CI_FLAGS=""
+    if [ "$CI_MODE" = true ]; then
+        CI_FLAGS="--ci"
     fi
     
-    # Check if target patch file already exists
-    if [ ! -f "$TARGET_PATCH_FILE" ]; then
-        # First time creating this patch for this branch
-        echo "Creating new patch at $TARGET_PATCH_FILE..."
-        cp new.patch "$TARGET_PATCH_FILE"
+    # Run save-patch.sh and capture the result
+    if [ "$CI_MODE" = true ]; then
+        # In CI mode, use quiet output
+        PATCH_OUTPUT=$("$SCRIPT_DIR/save-patch.sh" -r "$ORG/$REPO" -b "$BRANCH" $CI_FLAGS lighthouse 2>&1)
+        PATCH_EXIT_CODE=$?
     else
-        # Compare patches and update if different
-        if [ -f "$USED_PATCH_FILE" ]; then
-            if ! diff -q "$USED_PATCH_FILE" new.patch > /dev/null 2>&1; then
-                echo "Patch has changed from the original."
-                echo ""
-                if [ "$CI_MODE" = true ]; then
-                    echo "CI mode: Auto-updating patch file..."
-                    REPLY="y"
-                else
-                    read -p "Update the patch file at $TARGET_PATCH_FILE? (y/N) " -n 1 -r
-                    echo ""
-                fi
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    echo "Updating $TARGET_PATCH_FILE..."
-                    cp new.patch "$TARGET_PATCH_FILE"
-                    echo "Patch updated successfully!"
-                else
-                    echo "Keeping original patch unchanged."
-                fi
-            else
-                echo "Patch has not changed."
-            fi
-        fi
+        # In interactive mode, show full output
+        "$SCRIPT_DIR/save-patch.sh" -r "$ORG/$REPO" -b "$BRANCH" lighthouse
+        PATCH_EXIT_CODE=$?
     fi
     
-    # Clean up temporary files
-    rm -f new.patch
+    if [ $PATCH_EXIT_CODE -eq 0 ]; then
+        if [ "$CI_MODE" = true ]; then
+            echo "Patch saved: $PATCH_OUTPUT"
+        fi
+        echo ""
+        echo "Build and patch generation completed successfully!"
+    elif [ $PATCH_EXIT_CODE -eq 2 ]; then
+        echo "No changes detected - patch unchanged"
+    else
+        echo "Warning: Failed to generate patch (exit code: $PATCH_EXIT_CODE)"
+    fi
 else
     echo "Build failed!"
     exit 1
