@@ -33,7 +33,7 @@ index 456376e..4698202 100644
  serde_json = { workspace = true }
  slasher = { workspace = true }
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 4a6f34c..52df046 100644
+index 18a453d..38eb21b 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -97,6 +97,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -45,7 +45,7 @@ index 4a6f34c..52df046 100644
      },
      /// Inform the network to send a Status to this peer.
      StatusPeer(PeerId),
-@@ -1560,12 +1562,18 @@ impl<E: EthSpec> Network<E> {
+@@ -1291,12 +1293,18 @@ impl<E: EthSpec> Network<E> {
                          );
                      }
                      Ok(msg) => {
@@ -164,24 +164,16 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 5d5daae..8e52526 100644
+index ddc043b..134090b 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
-@@ -14,7 +14,9 @@ use beacon_processor::{BeaconProcessorSend, DuplicateCache};
- use futures::prelude::*;
- use lighthouse_network::rpc::*;
- use lighthouse_network::{
-+    rpc::InboundRequestId,
-     service::api_types::{AppRequestId, SyncRequestId},
-+    types::SyncState,
-     MessageId, NetworkGlobals, PeerId, PubsubMessage, Response,
- };
- use logging::crit;
-@@ -25,6 +27,7 @@ use tokio::sync::mpsc;
+@@ -25,6 +25,9 @@ use tokio::sync::mpsc;
  use tokio_stream::wrappers::UnboundedReceiverStream;
- use tracing::{debug, error, info_span, trace, warn, Instrument};
+ use tracing::{debug, error, trace, warn};
  use types::{BlobSidecar, DataColumnSidecar, EthSpec, ForkContext, SignedBeaconBlock};
 +use xatu::ObserverResult;
++use lighthouse_network::rpc::InboundRequestId;
++use lighthouse_network::types::SyncState;
  
  /// Handles messages from the network and routes them to the appropriate service to be handled.
  pub struct Router<T: BeaconChainTypes> {
@@ -230,7 +222,7 @@ index 5d5daae..8e52526 100644
          };
  
          // spawn handler task and move the message handler instance into the spawned thread
-@@ -178,8 +192,15 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -177,8 +191,15 @@ impl<T: BeaconChainTypes> Router<T> {
              } => {
                  self.on_rpc_error(peer_id, app_request_id, error);
              }
@@ -248,7 +240,7 @@ index 5d5daae..8e52526 100644
              }
          }
      }
-@@ -326,9 +347,119 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -325,9 +346,119 @@ impl<T: BeaconChainTypes> Router<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -369,7 +361,7 @@ index 5d5daae..8e52526 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index f0414b6..c77feb4 100644
+index a82f94e..1b2d244 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -40,6 +40,7 @@ use types::{
@@ -473,10 +465,10 @@ index 3d8a25e..3167c5b 100644
 +    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 59ec1a8..ade8f1f 100644
+index cb96b49..fc7bf30 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -446,6 +446,13 @@ fn main() {
+@@ -460,6 +460,13 @@ fn main() {
  
      let matches = cli.get_matches();
  
