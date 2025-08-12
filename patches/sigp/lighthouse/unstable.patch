@@ -434,7 +434,7 @@ index a82f94e..1b2d244 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index e583200..cd99aa8 100644
+index e57b8cf..ab26c18 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -241,6 +241,14 @@ pub fn cli_app() -> Command {
