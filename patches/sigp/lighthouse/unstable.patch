@@ -33,7 +33,7 @@ index 456376e..4698202 100644
  serde_json = { workspace = true }
  slasher = { workspace = true }
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 18a453d..38eb21b 100644
+index 54c01ae..3d1d3e7 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -97,6 +97,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -45,7 +45,7 @@ index 18a453d..38eb21b 100644
      },
      /// Inform the network to send a Status to this peer.
      StatusPeer(PeerId),
-@@ -1291,12 +1293,18 @@ impl<E: EthSpec> Network<E> {
+@@ -1288,12 +1290,18 @@ impl<E: EthSpec> Network<E> {
                          );
                      }
                      Ok(msg) => {
@@ -65,30 +65,26 @@ index 18a453d..38eb21b 100644
                      }
                  }
 diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
-index 868cdb6..2db9e55 100644
+index 0bbbceb..ddb41bd 100644
 --- a/beacon_node/lighthouse_network/src/types/mod.rs
 +++ b/beacon_node/lighthouse_network/src/types/mod.rs
-@@ -12,7 +12,7 @@ pub type Enr = discv5::enr::Enr<discv5::enr::CombinedKey>;
- 
- pub use eth2::lighthouse::sync_state::{BackFillState, SyncState};
- pub use globals::NetworkGlobals;
--pub use pubsub::{PubsubMessage, SnappyTransform};
-+pub use pubsub::{get_compressed_size, PubsubMessage, SnappyTransform};
- pub use subnet::{Subnet, SubnetDiscovery};
- pub use topics::{
-     all_topics_at_fork, core_topics_to_subscribe, is_fork_non_core_topic, subnet_from_topic_hash,
+@@ -18,3 +18,4 @@ pub use topics::{
+     GossipEncoding, GossipKind, GossipTopic, TopicConfig, all_topics_at_fork,
+     core_topics_to_subscribe, is_fork_non_core_topic, subnet_from_topic_hash,
+ };
++pub use pubsub::{get_compressed_size};
 diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
-index 601c59a..8b2b2c0 100644
+index 567c76a..2a3491e 100644
 --- a/beacon_node/lighthouse_network/src/types/pubsub.rs
 +++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
-@@ -4,6 +4,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
- use crate::TopicHash;
- use snap::raw::{decompress_len, Decoder, Encoder};
- use ssz::{Decode, Encode};
+@@ -16,6 +16,7 @@ use types::{
+     SignedBeaconBlockFulu, SignedBlsToExecutionChange, SignedContributionAndProof,
+     SignedVoluntaryExit, SingleAttestation, SubnetId, SyncCommitteeMessage, SyncSubnetId,
+ };
 +use std::collections::HashMap;
- use std::io::{Error, ErrorKind};
- use std::sync::Arc;
- use types::{
+ 
+ #[derive(Debug, Clone, PartialEq)]
+ pub enum PubsubMessage<E: EthSpec> {
 @@ -47,6 +48,27 @@ pub enum PubsubMessage<E: EthSpec> {
      LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
  }
@@ -139,7 +135,7 @@ index 601c59a..8b2b2c0 100644
                  ErrorKind::InvalidData,
                  "ssz_snappy encoded data > max_compressed_len",
 diff --git a/beacon_node/network/Cargo.toml b/beacon_node/network/Cargo.toml
-index cdb6ba7..3cb36e3 100644
+index dc251bd..7478506 100644
 --- a/beacon_node/network/Cargo.toml
 +++ b/beacon_node/network/Cargo.toml
 @@ -46,6 +46,9 @@ tracing = { workspace = true }
@@ -164,7 +160,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index ddc043b..134090b 100644
+index d534c35..cded32e 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -25,6 +25,9 @@ use tokio::sync::mpsc;
@@ -240,7 +236,7 @@ index ddc043b..134090b 100644
              }
          }
      }
-@@ -325,9 +346,119 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -325,9 +346,116 @@ impl<T: BeaconChainTypes> Router<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -258,12 +254,9 @@ index ddc043b..134090b 100644
 +            let sync_ok = match &sync_state {
 +                SyncState::Synced => true,
 +                SyncState::BackFillSyncing { .. } => true,
++                SyncState::SyncingHead { .. } => true,
 +                SyncState::SyncingFinalized { .. } => {
 +                    trace!("Skipping Xatu event - still syncing finalized chain");
-+                    false
-+                }
-+                SyncState::SyncingHead { .. } => {
-+                    trace!("Skipping Xatu event - still syncing head chain");
 +                    false
 +                }
 +                SyncState::SyncTransition => {
@@ -361,7 +354,7 @@ index ddc043b..134090b 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index a82f94e..1b2d244 100644
+index c97206e..2909157 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -40,6 +40,7 @@ use types::{
@@ -399,7 +392,7 @@ index a82f94e..1b2d244 100644
          )?;
  
          // attestation and sync committee subnet service
-@@ -526,8 +540,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -525,8 +539,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              NetworkEvent::PubsubMessage {
                  id,
                  source,
@@ -410,7 +403,7 @@ index a82f94e..1b2d244 100644
              } => {
                  match message {
                      // attestation information gets processed in the attestation service
-@@ -543,14 +558,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -542,14 +557,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                          self.send_to_router(RouterMessage::PubsubMessage(
                              id,
                              source,
@@ -434,7 +427,7 @@ index a82f94e..1b2d244 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index e57b8cf..ab26c18 100644
+index 924ff07..a0ff803 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -241,6 +241,14 @@ pub fn cli_app() -> Command {
@@ -465,17 +458,19 @@ index 3d8a25e..3167c5b 100644
 +    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index cb96b49..fc7bf30 100644
+index 40ad9f2..ff45bc7 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -460,6 +460,13 @@ fn main() {
+@@ -465,6 +465,15 @@ fn main() {
  
      let matches = cli.get_matches();
  
 +    // Set XATU_CONFIG environment variable early if xatu-config is provided
 +    if let Some(("beacon_node", bn_matches)) = matches.subcommand() {
 +        if let Some(xatu_config_path) = bn_matches.get_one::<String>("xatu-config") {
-+            std::env::set_var("XATU_CONFIG", xatu_config_path);
++            unsafe {
++                std::env::set_var("XATU_CONFIG", xatu_config_path);
++            }
 +        }
 +    }
 +
