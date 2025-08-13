@@ -66,6 +66,7 @@ impl XatuObserver {
                 .unwrap_or_else(|| "lighthouse".to_string()),
             outputs: full_config.outputs.clone(),
             ethereum: crate::config::XatuEthereum {
+                implementation: "lighthouse".to_string(),
                 genesis_time: network_info_clone
                     .as_ref()
                     .map(|n| n.genesis_time)

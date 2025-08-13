@@ -99,6 +99,7 @@ pub struct Network {
 /// Ethereum configuration for Xatu
 #[derive(Debug, Clone, Serialize)]
 pub struct XatuEthereum {
+    pub implementation: String,
     pub genesis_time: u64,
     pub seconds_per_slot: u64,
     pub slots_per_epoch: u64,
