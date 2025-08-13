@@ -5,7 +5,7 @@ use std::path::Path;
 
 // Version of xatu-sidecar to download from GitHub releases
 // Update this when new versions are released: https://github.com/ethpandaops/xatu-sidecar/releases
-const XATU_SIDECAR_VERSION: &str = "v0.0.3";
+const XATU_SIDECAR_VERSION: &str = "v0.0.4";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
