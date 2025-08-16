@@ -458,10 +458,10 @@ index 3d8a25e..3167c5b 100644
 +    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 40ad9f2..ff45bc7 100644
+index 13029c3..42a5631 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -465,6 +465,15 @@ fn main() {
+@@ -457,6 +457,15 @@ fn main() {
  
      let matches = cli.get_matches();
  
