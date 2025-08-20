@@ -160,7 +160,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index d534c35..cded32e 100644
+index 60fe094..3a84afd 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -25,6 +25,9 @@ use tokio::sync::mpsc;
@@ -458,10 +458,10 @@ index 3d8a25e..3167c5b 100644
 +    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 13029c3..42a5631 100644
+index 3b0f7c3..65ace87 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -457,6 +457,15 @@ fn main() {
+@@ -471,6 +471,15 @@ fn main() {
  
      let matches = cli.get_matches();
  
