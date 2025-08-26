@@ -74,18 +74,18 @@ index 0bbbceb..ddb41bd 100644
  };
 +pub use pubsub::{get_compressed_size};
 diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
-index 567c76a..2a3491e 100644
+index 72f2873..88ce11b 100644
 --- a/beacon_node/lighthouse_network/src/types/pubsub.rs
 +++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
-@@ -16,6 +16,7 @@ use types::{
-     SignedBeaconBlockFulu, SignedBlsToExecutionChange, SignedContributionAndProof,
-     SignedVoluntaryExit, SingleAttestation, SubnetId, SyncCommitteeMessage, SyncSubnetId,
+@@ -17,6 +17,7 @@ use types::{
+     SignedContributionAndProof, SignedVoluntaryExit, SingleAttestation, SubnetId,
+     SyncCommitteeMessage, SyncSubnetId,
  };
 +use std::collections::HashMap;
  
  #[derive(Debug, Clone, PartialEq)]
  pub enum PubsubMessage<E: EthSpec> {
-@@ -47,6 +48,27 @@ pub enum PubsubMessage<E: EthSpec> {
+@@ -48,6 +49,27 @@ pub enum PubsubMessage<E: EthSpec> {
      LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
  }
  
@@ -113,7 +113,7 @@ index 567c76a..2a3491e 100644
  // Implements the `DataTransform` trait of gossipsub to employ snappy compression
  pub struct SnappyTransform {
      /// Sets the maximum size we allow gossipsub messages to decompress to.
-@@ -70,8 +92,19 @@ impl gossipsub::DataTransform for SnappyTransform {
+@@ -71,8 +93,19 @@ impl gossipsub::DataTransform for SnappyTransform {
          &self,
          raw_message: gossipsub::RawMessage,
      ) -> Result<gossipsub::Message, std::io::Error> {
