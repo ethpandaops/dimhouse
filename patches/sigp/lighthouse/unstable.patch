@@ -33,7 +33,7 @@ index 456376e..4698202 100644
  serde_json = { workspace = true }
  slasher = { workspace = true }
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index eebc2f0..5e58d41 100644
+index 9edb705..6a78f62 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -97,6 +97,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -45,7 +45,7 @@ index eebc2f0..5e58d41 100644
      },
      /// Inform the network to send a Status to this peer.
      StatusPeer(PeerId),
-@@ -1287,12 +1289,18 @@ impl<E: EthSpec> Network<E> {
+@@ -1281,12 +1283,18 @@ impl<E: EthSpec> Network<E> {
                          );
                      }
                      Ok(msg) => {
