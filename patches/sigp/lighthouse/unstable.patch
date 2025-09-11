@@ -1,5 +1,5 @@
 diff --git a/.gitignore b/.gitignore
-index e63e218..3157193 100644
+index e63e218a3..3157193dc 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -18,3 +18,7 @@ genesis.ssz
@@ -11,7 +11,7 @@ index e63e218..3157193 100644
 +/xatu/src/libxatu.so
 +/xatu/src/libxatu.h
 diff --git a/Dockerfile b/Dockerfile
-index f925836..6551649 100644
+index f925836e4..655164986 100644
 --- a/Dockerfile
 +++ b/Dockerfile
 @@ -16,3 +16,5 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
@@ -21,19 +21,19 @@ index f925836..6551649 100644
 +ENV LD_LIBRARY_PATH=/usr/local/lib
 +COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
 diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
-index 456376e..4698202 100644
+index dd7416af5..b7e563f97 100644
 --- a/beacon_node/Cargo.toml
 +++ b/beacon_node/Cargo.toml
-@@ -33,6 +33,7 @@ http_api = { workspace = true }
- hyper = { workspace = true }
- lighthouse_network = { workspace = true }
- monitoring_api = { workspace = true }
+@@ -17,6 +17,7 @@ write_ssz_files = [
+ ] # Writes debugging .ssz files to /tmp during block processing.
+ 
+ [dependencies]
 +network = { workspace = true }
- sensitive_url = { workspace = true }
- serde_json = { workspace = true }
- slasher = { workspace = true }
+ account_utils = { workspace = true }
+ beacon_chain = { workspace = true }
+ clap = { workspace = true }
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 9edb705..6a78f62 100644
+index ea2c53a07..6bf853893 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -97,6 +97,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -65,7 +65,7 @@ index 9edb705..6a78f62 100644
                      }
                  }
 diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
-index 0bbbceb..ddb41bd 100644
+index 0bbbcebaf..ddb41bd3e 100644
 --- a/beacon_node/lighthouse_network/src/types/mod.rs
 +++ b/beacon_node/lighthouse_network/src/types/mod.rs
 @@ -18,3 +18,4 @@ pub use topics::{
@@ -74,7 +74,7 @@ index 0bbbceb..ddb41bd 100644
  };
 +pub use pubsub::{get_compressed_size};
 diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
-index 72f2873..88ce11b 100644
+index 72f2873de..88ce11bd2 100644
 --- a/beacon_node/lighthouse_network/src/types/pubsub.rs
 +++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
 @@ -17,6 +17,7 @@ use types::{
@@ -135,7 +135,7 @@ index 72f2873..88ce11b 100644
                  ErrorKind::InvalidData,
                  "ssz_snappy encoded data > max_compressed_len",
 diff --git a/beacon_node/network/Cargo.toml b/beacon_node/network/Cargo.toml
-index 5615148..bf73a6f 100644
+index 561514864..bf73a6f34 100644
 --- a/beacon_node/network/Cargo.toml
 +++ b/beacon_node/network/Cargo.toml
 @@ -47,6 +47,9 @@ tracing = { workspace = true }
@@ -149,7 +149,7 @@ index 5615148..bf73a6f 100644
  bls = { workspace = true }
  eth2 = { workspace = true }
 diff --git a/beacon_node/network/src/lib.rs b/beacon_node/network/src/lib.rs
-index 2a7fedb..908f1fe 100644
+index 2a7fedb53..908f1fea0 100644
 --- a/beacon_node/network/src/lib.rs
 +++ b/beacon_node/network/src/lib.rs
 @@ -1,4 +1,6 @@
@@ -160,7 +160,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 60fe094..3a84afd 100644
+index 60fe094bb..3a84afd76 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -25,6 +25,9 @@ use tokio::sync::mpsc;
@@ -354,7 +354,7 @@ index 60fe094..3a84afd 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index c97206e..2909157 100644
+index c97206ea8..29091578a 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -40,6 +40,7 @@ use types::{
@@ -427,7 +427,7 @@ index c97206e..2909157 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index 386eb72..57f4465 100644
+index 386eb721a..57f446522 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -240,6 +240,14 @@ pub fn cli_app() -> Command {
@@ -446,7 +446,7 @@ index 386eb72..57f4465 100644
              Arg::new("disable-upnp")
                  .long("disable-upnp")
 diff --git a/lighthouse/build.rs b/lighthouse/build.rs
-index 3d8a25e..3167c5b 100644
+index 3d8a25ec8..3167c5bd2 100644
 --- a/lighthouse/build.rs
 +++ b/lighthouse/build.rs
 @@ -1,2 +1,6 @@
@@ -458,7 +458,7 @@ index 3d8a25e..3167c5b 100644
 +    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 8660074..4618851 100644
+index 8660074e9..46188518f 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
 @@ -472,6 +472,15 @@ fn main() {
