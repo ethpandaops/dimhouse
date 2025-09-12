@@ -1,8 +1,8 @@
 diff --git a/.gitignore b/.gitignore
-index e63e218..3157193 100644
+index efd7916..5dea445 100644
 --- a/.gitignore
 +++ b/.gitignore
-@@ -18,3 +18,7 @@ genesis.ssz
+@@ -17,3 +17,7 @@ genesis.ssz
  
  # VSCode
  /.vscode
