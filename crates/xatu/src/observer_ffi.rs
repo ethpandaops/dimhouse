@@ -260,7 +260,8 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         message_size: usize,
     ) -> ObserverResult {
         let slot = block.slot();
-        let block_root = block.canonical_root();
+        let signed_block_header = block.signed_block_header();
+        let block_root = signed_block_header.message.canonical_root();
         debug!(
             "Xatu FFI: Received gossip block - slot: {}, root: 0x{}, message_id: {:?}",
             slot,
@@ -509,8 +510,9 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         topic: String,
         message_size: usize,
     ) -> ObserverResult {
-        let block_root = blob_sidecar.block_root();
         let slot = blob_sidecar.slot();
+        let signed_block_header = &blob_sidecar.signed_block_header;
+        let block_root = signed_block_header.message.canonical_root();
 
         debug!(
             "Xatu FFI: Received gossip blob sidecar - slot: {}, index: {}, root: 0x{}, message_id: {:?}",
@@ -590,8 +592,9 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         topic: String,
         message_size: usize,
     ) -> ObserverResult {
-        let block_root = column_sidecar.block_root();
         let slot = column_sidecar.slot();
+        let signed_block_header = &column_sidecar.signed_block_header;
+        let block_root = signed_block_header.message.canonical_root();
         let column_index = column_sidecar.index;
         let kzg_commitments_count = column_sidecar.kzg_commitments.len() as u32;
 
