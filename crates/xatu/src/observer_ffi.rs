@@ -260,7 +260,8 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         message_size: usize,
     ) -> ObserverResult {
         let slot = block.slot();
-        let block_root = block.canonical_root();
+        let signed_block_header = block.signed_block_header();
+        let block_root = signed_block_header.message.canonical_root();
         debug!(
             "Xatu FFI: Received gossip block - slot: {}, root: 0x{}, message_id: {:?}",
             slot,
