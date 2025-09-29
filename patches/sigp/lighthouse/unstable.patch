@@ -21,7 +21,7 @@ index f925836..6551649 100644
 +ENV LD_LIBRARY_PATH=/usr/local/lib
 +COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
 diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
-index dd7416a..b7e563f 100644
+index bb904a7..4f0b793 100644
 --- a/beacon_node/Cargo.toml
 +++ b/beacon_node/Cargo.toml
 @@ -17,6 +17,7 @@ write_ssz_files = [
