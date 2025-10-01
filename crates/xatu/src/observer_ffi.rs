@@ -10,7 +10,6 @@ use std::sync::{
 use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
-use tree_hash::TreeHash;
 use types::{
     BlobSidecar, DataColumnSidecar, DataColumnSubnetId, EthSpec, SignedAggregateAndProof,
     SignedBeaconBlock, SingleAttestation, SubnetId,
@@ -340,11 +339,11 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         topic: String,
         message_size: usize,
     ) -> ObserverResult {
-        let attestation_data_root = attestation.data.tree_hash_root();
+        let beacon_block_root = attestation.data.beacon_block_root;
         debug!(
-            "Xatu FFI: Received gossip attestation - subnet: {}, root: 0x{}, message_id: {:?}",
+            "Xatu FFI: Received gossip attestation - subnet: {}, beacon_block_root: 0x{}, message_id: {:?}",
             *subnet_id,
-            hex::encode(&attestation_data_root.0[..8]),
+            hex::encode(&beacon_block_root.0[..8]),
             message_id
         );
 
@@ -371,7 +370,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             peer_id: peer_id.to_string(),
             slot: slot_u64,
             epoch,
-            attestation_data_root: format!("0x{}", hex::encode(attestation_data_root.0)),
+            attestation_data_root: format!("0x{}", hex::encode(beacon_block_root.0)),
             subnet_id: u64::from(subnet_id),
             timestamp_ms: timestamp_millis as i64,
             message_id: hex::encode(&message_id.0),
@@ -421,12 +420,12 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         message_size: usize,
     ) -> ObserverResult {
         let attestation_data = aggregate.message().aggregate().data();
-        let attestation_data_root = attestation_data.tree_hash_root();
+        let beacon_block_root = attestation_data.beacon_block_root;
         let aggregator_index = aggregate.message().aggregator_index();
 
         debug!(
-            "Xatu FFI: Received gossip aggregate and proof - root: 0x{}, aggregator: {}, message_id: {:?}",
-            hex::encode(&attestation_data_root.0[..8]),
+            "Xatu FFI: Received gossip aggregate and proof - beacon_block_root: 0x{}, aggregator: {}, message_id: {:?}",
+            hex::encode(&beacon_block_root.0[..8]),
             aggregator_index,
             message_id
         );
@@ -454,7 +453,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             peer_id: peer_id.to_string(),
             slot: slot_u64,
             epoch,
-            attestation_data_root: format!("0x{}", hex::encode(attestation_data_root.0)),
+            attestation_data_root: format!("0x{}", hex::encode(beacon_block_root.0)),
             aggregator_index,
             timestamp_ms: timestamp_millis as i64,
             message_id: hex::encode(&message_id.0),
