@@ -354,7 +354,7 @@ index 60fe094..3a84afd 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index c97206e..2909157 100644
+index 4bd649b..faf5546 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -40,6 +40,7 @@ use types::{
@@ -427,7 +427,7 @@ index c97206e..2909157 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index 569d1e4..34aab0a 100644
+index 2e3b3fd..c904de6 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -241,6 +241,14 @@ pub fn cli_app() -> Command {
@@ -458,10 +458,10 @@ index 3d8a25e..3167c5b 100644
 +    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 8660074..4618851 100644
+index c93016a..d2cde68 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -472,6 +472,15 @@ fn main() {
+@@ -420,6 +420,15 @@ fn main() {
  
      let matches = cli.get_matches();
  
