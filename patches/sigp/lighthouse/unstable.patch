@@ -21,11 +21,11 @@ index f925836..6551649 100644
 +ENV LD_LIBRARY_PATH=/usr/local/lib
 +COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
 diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
-index 8e2c598..acd2872 100644
+index 985f4c1..cb7fff3 100644
 --- a/beacon_node/Cargo.toml
 +++ b/beacon_node/Cargo.toml
-@@ -17,6 +17,7 @@ write_ssz_files = [
- ] # Writes debugging .ssz files to /tmp during block processing.
+@@ -18,6 +18,7 @@ write_ssz_files = [
+ testing = [] # Enables testing-only CLI flags
  
  [dependencies]
 +network = { workspace = true }
@@ -427,7 +427,7 @@ index 4bd649b..faf5546 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index 2e3b3fd..c904de6 100644
+index 28f3551..141fa07 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -241,6 +241,14 @@ pub fn cli_app() -> Command {
