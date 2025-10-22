@@ -65,7 +65,7 @@ index ea2c53a..6bf8538 100644
                      }
                  }
 diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
-index 0bbbceb..ddb41bd 100644
+index 3f57406..66bd93f 100644
 --- a/beacon_node/lighthouse_network/src/types/mod.rs
 +++ b/beacon_node/lighthouse_network/src/types/mod.rs
 @@ -18,3 +18,4 @@ pub use topics::{
@@ -160,16 +160,24 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 60fe094..3a84afd 100644
+index 60fe094..0f0f079 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
-@@ -25,6 +25,9 @@ use tokio::sync::mpsc;
+@@ -12,7 +12,9 @@ use crate::sync::SyncMessage;
+ use beacon_chain::{BeaconChain, BeaconChainTypes};
+ use beacon_processor::{BeaconProcessorSend, DuplicateCache};
+ use futures::prelude::*;
++use lighthouse_network::rpc::InboundRequestId;
+ use lighthouse_network::rpc::*;
++use lighthouse_network::types::SyncState;
+ use lighthouse_network::{
+     MessageId, NetworkGlobals, PeerId, PubsubMessage, Response,
+     service::api_types::{AppRequestId, SyncRequestId},
+@@ -25,6 +27,7 @@ use tokio::sync::mpsc;
  use tokio_stream::wrappers::UnboundedReceiverStream;
  use tracing::{debug, error, trace, warn};
  use types::{BlobSidecar, DataColumnSidecar, EthSpec, ForkContext, SignedBeaconBlock};
 +use xatu::ObserverResult;
-+use lighthouse_network::rpc::InboundRequestId;
-+use lighthouse_network::types::SyncState;
  
  /// Handles messages from the network and routes them to the appropriate service to be handled.
  pub struct Router<T: BeaconChainTypes> {
@@ -236,7 +244,7 @@ index 60fe094..3a84afd 100644
              }
          }
      }
-@@ -325,9 +346,116 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -325,9 +346,117 @@ impl<T: BeaconChainTypes> Router<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -254,6 +262,7 @@ index 60fe094..3a84afd 100644
 +            let sync_ok = match &sync_state {
 +                SyncState::Synced => true,
 +                SyncState::BackFillSyncing { .. } => true,
++                SyncState::CustodyBackFillSyncing { .. } => true,
 +                SyncState::SyncingHead { .. } => true,
 +                SyncState::SyncingFinalized { .. } => {
 +                    trace!("Skipping Xatu event - still syncing finalized chain");
@@ -427,10 +436,10 @@ index 4bd649b..faf5546 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index 28f3551..141fa07 100644
+index e4c7c6f..049e61c 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
-@@ -241,6 +241,14 @@ pub fn cli_app() -> Command {
+@@ -253,6 +253,14 @@ pub fn cli_app() -> Command {
                  .action(ArgAction::Set)
                  .display_order(0)
          )
