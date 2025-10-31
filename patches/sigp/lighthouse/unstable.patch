@@ -33,7 +33,7 @@ index 56c2fb4..60d3244 100644
  beacon_chain = { workspace = true }
  clap = { workspace = true }
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index ea2c53a..6bf8538 100644
+index 1df17df..c7cd8a3 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -97,6 +97,8 @@ pub enum NetworkEvent<E: EthSpec> {
