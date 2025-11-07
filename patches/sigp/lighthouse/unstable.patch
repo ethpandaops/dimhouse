@@ -135,7 +135,7 @@ index 72f2873..88ce11b 100644
                  ErrorKind::InvalidData,
                  "ssz_snappy encoded data > max_compressed_len",
 diff --git a/beacon_node/network/Cargo.toml b/beacon_node/network/Cargo.toml
-index 5615148..bf73a6f 100644
+index b60c5e6..712858f 100644
 --- a/beacon_node/network/Cargo.toml
 +++ b/beacon_node/network/Cargo.toml
 @@ -47,6 +47,9 @@ tracing = { workspace = true }
