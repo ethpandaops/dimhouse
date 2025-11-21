@@ -33,10 +33,10 @@ index fd01355..e3a0e31 100644
  beacon_chain = { workspace = true }
  clap = { workspace = true }
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 1df17df..c7cd8a3 100644
+index 4eebda1..1cf640a 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
-@@ -97,6 +97,8 @@ pub enum NetworkEvent<E: EthSpec> {
+@@ -98,6 +98,8 @@ pub enum NetworkEvent<E: EthSpec> {
          topic: TopicHash,
          /// The message itself.
          message: PubsubMessage<E>,
@@ -363,10 +363,10 @@ index 60fe094..0f0f079 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index 4bd649b..faf5546 100644
+index a416f5c..e9a2340 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
-@@ -40,6 +40,7 @@ use types::{
+@@ -41,6 +41,7 @@ use types::{
      EthSpec, ForkContext, Slot, SubnetId, SyncCommitteeSubscription, SyncSubnetId, Unsigned,
      ValidatorSubscription,
  };
@@ -374,7 +374,7 @@ index 4bd649b..faf5546 100644
  
  mod tests;
  
-@@ -307,6 +308,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -310,6 +311,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
  
          // launch derived network services
  
@@ -393,7 +393,7 @@ index 4bd649b..faf5546 100644
          // router task
          let router_send = Router::spawn(
              beacon_chain.clone(),
-@@ -316,6 +329,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -319,6 +332,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              invalid_block_storage,
              beacon_processor_send,
              fork_context.clone(),
@@ -401,7 +401,7 @@ index 4bd649b..faf5546 100644
          )?;
  
          // attestation and sync committee subnet service
-@@ -525,8 +539,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -530,8 +544,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              NetworkEvent::PubsubMessage {
                  id,
                  source,
@@ -412,7 +412,7 @@ index 4bd649b..faf5546 100644
              } => {
                  match message {
                      // attestation information gets processed in the attestation service
-@@ -542,14 +557,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -547,14 +562,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                          self.send_to_router(RouterMessage::PubsubMessage(
                              id,
                              source,
