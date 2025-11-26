@@ -11,10 +11,10 @@ index efd7916..5dea445 100644
 +/xatu/src/libxatu.so
 +/xatu/src/libxatu.h
 diff --git a/Dockerfile b/Dockerfile
-index f925836..6551649 100644
+index 8cc20ab..92d063e 100644
 --- a/Dockerfile
 +++ b/Dockerfile
-@@ -16,3 +16,5 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
+@@ -22,3 +22,5 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
    && apt-get clean \
    && rm -rf /var/lib/apt/lists/*
  COPY --from=builder /usr/local/cargo/bin/lighthouse /usr/local/bin/lighthouse
