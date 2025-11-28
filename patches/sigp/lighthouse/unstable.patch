@@ -11,15 +11,38 @@ index efd7916..5dea445 100644
 +/xatu/src/libxatu.so
 +/xatu/src/libxatu.h
 diff --git a/Dockerfile b/Dockerfile
-index 8cc20ab..92d063e 100644
+index 8cc20ab..77fd313 100644
 --- a/Dockerfile
 +++ b/Dockerfile
-@@ -22,3 +22,5 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
+@@ -1,19 +1,13 @@
+ FROM rust:1.88.0-bullseye AS builder
+ RUN apt-get update && apt-get -y upgrade && apt-get install -y cmake libclang-dev
++COPY . lighthouse
+ ARG FEATURES
+ ARG PROFILE=release
+ ARG CARGO_USE_GIT_CLI=true
+ ENV FEATURES=$FEATURES
+ ENV PROFILE=$PROFILE
+ ENV CARGO_NET_GIT_FETCH_WITH_CLI=$CARGO_USE_GIT_CLI
+-ENV CARGO_INCREMENTAL=1
+-
+-WORKDIR /lighthouse
+-COPY . .
+-# Persist the registry and target file across builds. See: https://docs.docker.com/build/cache/optimize/#use-cache-mounts
+-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+-    --mount=type=cache,target=/lighthouse/target \
+-    make
++RUN cd lighthouse && make
+ 
+ FROM ubuntu:22.04
+ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-recommends \
+@@ -22,3 +16,6 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
    && apt-get clean \
    && rm -rf /var/lib/apt/lists/*
  COPY --from=builder /usr/local/cargo/bin/lighthouse /usr/local/bin/lighthouse
 +ENV LD_LIBRARY_PATH=/usr/local/lib
 +COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
++
 diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
 index fd01355..e3a0e31 100644
 --- a/beacon_node/Cargo.toml
