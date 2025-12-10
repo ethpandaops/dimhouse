@@ -44,7 +44,7 @@ index 8cc20ab..77fd313 100644
 +COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
 +
 diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
-index fd01355..e3a0e31 100644
+index 5352814..5c8be60 100644
 --- a/beacon_node/Cargo.toml
 +++ b/beacon_node/Cargo.toml
 @@ -18,6 +18,7 @@ write_ssz_files = [
@@ -54,7 +54,7 @@ index fd01355..e3a0e31 100644
 +network = { workspace = true }
  account_utils = { workspace = true }
  beacon_chain = { workspace = true }
- clap = { workspace = true }
+ bls = { workspace = true }
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
 index 4eebda1..1cf640a 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
@@ -88,10 +88,10 @@ index 4eebda1..1cf640a 100644
                      }
                  }
 diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
-index 3f57406..66bd93f 100644
+index eea8782..2ac0e0b 100644
 --- a/beacon_node/lighthouse_network/src/types/mod.rs
 +++ b/beacon_node/lighthouse_network/src/types/mod.rs
-@@ -18,3 +18,4 @@ pub use topics::{
+@@ -19,3 +19,4 @@ pub use topics::{
      GossipEncoding, GossipKind, GossipTopic, TopicConfig, all_topics_at_fork,
      core_topics_to_subscribe, is_fork_non_core_topic, subnet_from_topic_hash,
  };
@@ -158,11 +158,11 @@ index 72f2873..88ce11b 100644
                  ErrorKind::InvalidData,
                  "ssz_snappy encoded data > max_compressed_len",
 diff --git a/beacon_node/network/Cargo.toml b/beacon_node/network/Cargo.toml
-index b60c5e6..712858f 100644
+index bf26196..c9e6844 100644
 --- a/beacon_node/network/Cargo.toml
 +++ b/beacon_node/network/Cargo.toml
-@@ -47,6 +47,9 @@ tracing = { workspace = true }
- tracing-subscriber = { workspace = true }
+@@ -49,6 +49,9 @@ tracing-subscriber = { workspace = true }
+ typenum = { workspace = true }
  types = { workspace = true }
  
 +# Xatu dependency
@@ -386,18 +386,18 @@ index 60fe094..0f0f079 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index a416f5c..e9a2340 100644
+index 0869b44..538b497 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
-@@ -41,6 +41,7 @@ use types::{
-     EthSpec, ForkContext, Slot, SubnetId, SyncCommitteeSubscription, SyncSubnetId, Unsigned,
+@@ -42,6 +42,7 @@ use types::{
+     EthSpec, ForkContext, Slot, SubnetId, SyncCommitteeSubscription, SyncSubnetId,
      ValidatorSubscription,
  };
 +use xatu;
  
  mod tests;
  
-@@ -310,6 +311,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -311,6 +312,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
  
          // launch derived network services
  
@@ -416,7 +416,7 @@ index a416f5c..e9a2340 100644
          // router task
          let router_send = Router::spawn(
              beacon_chain.clone(),
-@@ -319,6 +332,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -320,6 +333,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              invalid_block_storage,
              beacon_processor_send,
              fork_context.clone(),
@@ -424,7 +424,7 @@ index a416f5c..e9a2340 100644
          )?;
  
          // attestation and sync committee subnet service
-@@ -530,8 +544,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -531,8 +545,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              NetworkEvent::PubsubMessage {
                  id,
                  source,
@@ -435,7 +435,7 @@ index a416f5c..e9a2340 100644
              } => {
                  match message {
                      // attestation information gets processed in the attestation service
-@@ -547,14 +562,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -548,14 +563,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                          self.send_to_router(RouterMessage::PubsubMessage(
                              id,
                              source,
