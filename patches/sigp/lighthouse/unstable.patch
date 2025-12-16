@@ -10,6 +10,1003 @@ index efd7916..5dea445 100644
 +# Xatu build artifacts
 +/xatu/src/libxatu.so
 +/xatu/src/libxatu.h
+diff --git a/Cargo.lock b/Cargo.lock
+index 6ed7bfd..ebab51b 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1233,9 +1233,9 @@ dependencies = [
+  "educe",
+  "eth2",
+  "eth2_network_config",
+- "ethereum_hashing",
++ "ethereum_hashing 0.8.0",
+  "ethereum_serde_utils",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "execution_layer",
+  "fixed_bytes",
+@@ -1280,7 +1280,7 @@ dependencies = [
+  "tokio",
+  "tokio-stream",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "tree_hash_derive",
+  "typenum",
+  "types",
+@@ -1308,6 +1308,7 @@ dependencies = [
+  "hyper 1.8.1",
+  "lighthouse_network",
+  "monitoring_api",
++ "network",
+  "network_utils",
+  "node_test_rig",
+  "sensitive_url",
+@@ -1493,15 +1494,15 @@ dependencies = [
+  "alloy-primitives",
+  "arbitrary",
+  "blst",
+- "ethereum_hashing",
++ "ethereum_hashing 0.8.0",
+  "ethereum_serde_utils",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "fixed_bytes",
+  "hex",
+  "rand 0.9.2",
+  "safe_arith",
+  "serde",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "zeroize",
+ ]
+ 
+@@ -1542,7 +1543,7 @@ dependencies = [
+  "clap",
+  "clap_utils",
+  "eth2_network_config",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "hex",
+  "lighthouse_network",
+  "log",
+@@ -1600,7 +1601,7 @@ dependencies = [
+  "bls",
+  "context_deserialize",
+  "eth2",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "lighthouse_version",
+  "mockito",
+  "reqwest",
+@@ -1888,7 +1889,7 @@ dependencies = [
+  "clap",
+  "dirs",
+  "eth2_network_config",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "hex",
+  "serde",
+  "serde_json",
+@@ -1907,7 +1908,7 @@ dependencies = [
+  "environment",
+  "eth2",
+  "eth2_config",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "execution_layer",
+  "futures",
+  "genesis",
+@@ -2554,12 +2555,12 @@ dependencies = [
+  "alloy-json-abi",
+  "alloy-primitives",
+  "bls",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "hex",
+  "reqwest",
+  "serde_json",
+  "sha2 0.9.9",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "types",
+ ]
+ 
+@@ -2865,7 +2866,7 @@ dependencies = [
+  "context_deserialize",
+  "educe",
+  "eth2_network_config",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "execution_layer",
+  "fork_choice",
+@@ -2883,7 +2884,7 @@ dependencies = [
+  "ssz_types",
+  "state_processing",
+  "swap_or_not_shuffle",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "tree_hash_derive",
+  "typenum",
+  "types",
+@@ -3145,7 +3146,7 @@ dependencies = [
+  "eip_3076",
+  "eth2_keystore",
+  "ethereum_serde_utils",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "futures",
+  "futures-util",
+@@ -3180,7 +3181,7 @@ version = "0.2.0"
+ dependencies = [
+  "base64 0.13.1",
+  "bls",
+- "ethereum_hashing",
++ "ethereum_hashing 0.8.0",
+  "hex",
+  "num-bigint",
+  "serde",
+@@ -3228,7 +3229,7 @@ dependencies = [
+  "bytes",
+  "discv5",
+  "eth2_config",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "fixed_bytes",
+  "kzg",
+  "pretty_reqwest_error",
+@@ -3269,6 +3270,17 @@ dependencies = [
+  "tempfile",
+ ]
+ 
++[[package]]
++name = "ethereum_hashing"
++version = "0.7.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c853bd72c9e5787f8aafc3df2907c2ed03cff3150c3acd94e2e53a98ab70a8ab"
++dependencies = [
++ "cpufeatures",
++ "ring",
++ "sha2 0.10.9",
++]
++
+ [[package]]
+ name = "ethereum_hashing"
+ version = "0.8.0"
+@@ -3293,6 +3305,21 @@ dependencies = [
+  "serde_json",
+ ]
+ 
++[[package]]
++name = "ethereum_ssz"
++version = "0.9.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0dcddb2554d19cde19b099fadddde576929d7a4d0c1cd3512d1fd95cf174375c"
++dependencies = [
++ "alloy-primitives",
++ "ethereum_serde_utils",
++ "itertools 0.13.0",
++ "serde",
++ "serde_derive",
++ "smallvec",
++ "typenum",
++]
++
+ [[package]]
+ name = "ethereum_ssz"
+ version = "0.10.0"
+@@ -3403,7 +3430,7 @@ dependencies = [
+  "bytes",
+  "eth2",
+  "ethereum_serde_utils",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "fixed_bytes",
+  "fork_choice",
+  "hash-db",
+@@ -3434,7 +3461,7 @@ dependencies = [
+  "tokio",
+  "tokio-stream",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "tree_hash_derive",
+  "triehash",
+  "typenum",
+@@ -3534,6 +3561,18 @@ dependencies = [
+  "windows-acl",
+ ]
+ 
++[[package]]
++name = "filetime"
++version = "0.2.26"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "bc0505cd1b6fa6580283f6bdf70a73fcf4aba1184038c90902b92b3dd0df63ed"
++dependencies = [
++ "cfg-if",
++ "libc",
++ "libredox",
++ "windows-sys 0.60.2",
++]
++
+ [[package]]
+ name = "find-msvc-tools"
+ version = "0.1.5"
+@@ -3609,7 +3648,7 @@ name = "fork_choice"
+ version = "0.1.0"
+ dependencies = [
+  "beacon_chain",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "fixed_bytes",
+  "logging",
+@@ -3803,14 +3842,14 @@ name = "genesis"
+ version = "0.2.0"
+ dependencies = [
+  "bls",
+- "ethereum_hashing",
+- "ethereum_ssz",
++ "ethereum_hashing 0.8.0",
++ "ethereum_ssz 0.10.0",
+  "int_to_bytes",
+  "merkle_proof",
+  "rayon",
+  "state_processing",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "types",
+ ]
+ 
+@@ -4250,7 +4289,7 @@ dependencies = [
+  "either",
+  "eth2",
+  "ethereum_serde_utils",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "execution_layer",
+  "fixed_bytes",
+  "futures",
+@@ -4282,7 +4321,7 @@ dependencies = [
+  "tokio",
+  "tokio-stream",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "types",
+  "warp",
+  "warp_utils",
+@@ -4390,7 +4429,7 @@ dependencies = [
+  "tokio",
+  "tokio-rustls 0.26.4",
+  "tower-service",
+- "webpki-roots",
++ "webpki-roots 1.0.4",
+ ]
+ 
+ [[package]]
+@@ -4914,9 +4953,9 @@ dependencies = [
+  "c-kzg",
+  "criterion",
+  "educe",
+- "ethereum_hashing",
++ "ethereum_hashing 0.8.0",
+  "ethereum_serde_utils",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "hex",
+  "rayon",
+@@ -4924,7 +4963,7 @@ dependencies = [
+  "serde",
+  "serde_json",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+ ]
+ 
+ [[package]]
+@@ -4956,8 +4995,8 @@ dependencies = [
+  "eth2",
+  "eth2_network_config",
+  "eth2_wallet",
+- "ethereum_hashing",
+- "ethereum_ssz",
++ "ethereum_hashing 0.8.0",
++ "ethereum_ssz 0.10.0",
+  "execution_layer",
+  "fixed_bytes",
+  "hex",
+@@ -4975,7 +5014,7 @@ dependencies = [
+  "store",
+  "tracing",
+  "tracing-subscriber",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "types",
+  "validator_dir",
+ ]
+@@ -5040,6 +5079,28 @@ dependencies = [
+  "thiserror 1.0.69",
+ ]
+ 
++[[package]]
++name = "libp2p"
++version = "0.54.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "bbbe80f9c7e00526cd6b838075b9c171919404a4732cb2fa8ece0a093223bfc4"
++dependencies = [
++ "bytes",
++ "either",
++ "futures",
++ "futures-timer",
++ "getrandom 0.2.16",
++ "libp2p-allow-block-list 0.4.0",
++ "libp2p-connection-limits 0.4.0",
++ "libp2p-core 0.42.0",
++ "libp2p-identity",
++ "libp2p-swarm 0.45.1",
++ "multiaddr",
++ "pin-project",
++ "rw-stream-sink",
++ "thiserror 1.0.69",
++]
++
+ [[package]]
+ name = "libp2p"
+ version = "0.56.0"
+@@ -5051,9 +5112,9 @@ dependencies = [
+  "futures",
+  "futures-timer",
+  "getrandom 0.2.16",
+- "libp2p-allow-block-list",
+- "libp2p-connection-limits",
+- "libp2p-core",
++ "libp2p-allow-block-list 0.6.0",
++ "libp2p-connection-limits 0.6.0",
++ "libp2p-core 0.43.1",
+  "libp2p-dns",
+  "libp2p-identify",
+  "libp2p-identity",
+@@ -5062,7 +5123,7 @@ dependencies = [
+  "libp2p-noise",
+  "libp2p-plaintext",
+  "libp2p-quic",
+- "libp2p-swarm",
++ "libp2p-swarm 0.47.0",
+  "libp2p-tcp",
+  "libp2p-upnp",
+  "libp2p-yamux",
+@@ -5072,15 +5133,39 @@ dependencies = [
+  "thiserror 2.0.17",
+ ]
+ 
++[[package]]
++name = "libp2p-allow-block-list"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d1027ccf8d70320ed77e984f273bc8ce952f623762cb9bf2d126df73caef8041"
++dependencies = [
++ "libp2p-core 0.42.0",
++ "libp2p-identity",
++ "libp2p-swarm 0.45.1",
++ "void",
++]
++
+ [[package]]
+ name = "libp2p-allow-block-list"
+ version = "0.6.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d16ccf824ee859ca83df301e1c0205270206223fd4b1f2e512a693e1912a8f4a"
+ dependencies = [
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+- "libp2p-swarm",
++ "libp2p-swarm 0.47.0",
++]
++
++[[package]]
++name = "libp2p-connection-limits"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8d003540ee8baef0d254f7b6bfd79bac3ddf774662ca0abf69186d517ef82ad8"
++dependencies = [
++ "libp2p-core 0.42.0",
++ "libp2p-identity",
++ "libp2p-swarm 0.45.1",
++ "void",
+ ]
+ 
+ [[package]]
+@@ -5089,9 +5174,37 @@ version = "0.6.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a18b8b607cf3bfa2f8c57db9c7d8569a315d5cc0a282e6bfd5ebfc0a9840b2a0"
+ dependencies = [
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+- "libp2p-swarm",
++ "libp2p-swarm 0.47.0",
++]
++
++[[package]]
++name = "libp2p-core"
++version = "0.42.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a61f26c83ed111104cd820fe9bc3aaabbac5f1652a1d213ed6e900b7918a1298"
++dependencies = [
++ "either",
++ "fnv",
++ "futures",
++ "futures-timer",
++ "libp2p-identity",
++ "multiaddr",
++ "multihash",
++ "multistream-select",
++ "once_cell",
++ "parking_lot",
++ "pin-project",
++ "quick-protobuf",
++ "rand 0.8.5",
++ "rw-stream-sink",
++ "smallvec",
++ "thiserror 1.0.69",
++ "tracing",
++ "unsigned-varint 0.8.0",
++ "void",
++ "web-time",
+ ]
+ 
+ [[package]]
+@@ -5128,7 +5241,7 @@ dependencies = [
+  "async-trait",
+  "futures",
+  "hickory-resolver",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+  "parking_lot",
+  "smallvec",
+@@ -5152,9 +5265,9 @@ dependencies = [
+  "getrandom 0.2.16",
+  "hashlink 0.10.0",
+  "hex_fmt",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+- "libp2p-swarm",
++ "libp2p-swarm 0.47.0",
+  "prometheus-client",
+  "quick-protobuf",
+  "quick-protobuf-codec",
+@@ -5176,9 +5289,9 @@ dependencies = [
+  "futures",
+  "futures-bounded",
+  "futures-timer",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+- "libp2p-swarm",
++ "libp2p-swarm 0.47.0",
+  "quick-protobuf",
+  "quick-protobuf-codec",
+  "smallvec",
+@@ -5215,9 +5328,9 @@ dependencies = [
+  "futures",
+  "hickory-proto",
+  "if-watch",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+- "libp2p-swarm",
++ "libp2p-swarm 0.47.0",
+  "rand 0.8.5",
+  "smallvec",
+  "socket2 0.5.10",
+@@ -5232,10 +5345,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "805a555148522cb3414493a5153451910cb1a146c53ffbf4385708349baf62b7"
+ dependencies = [
+  "futures",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identify",
+  "libp2p-identity",
+- "libp2p-swarm",
++ "libp2p-swarm 0.47.0",
+  "pin-project",
+  "prometheus-client",
+  "web-time",
+@@ -5250,7 +5363,7 @@ dependencies = [
+  "asynchronous-codec",
+  "bytes",
+  "futures",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+  "nohash-hasher",
+  "parking_lot",
+@@ -5269,7 +5382,7 @@ dependencies = [
+  "asynchronous-codec",
+  "bytes",
+  "futures",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+  "multiaddr",
+  "multihash",
+@@ -5292,7 +5405,7 @@ dependencies = [
+  "asynchronous-codec",
+  "bytes",
+  "futures",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+  "quick-protobuf",
+  "quick-protobuf-codec",
+@@ -5308,7 +5421,7 @@ dependencies = [
+  "futures",
+  "futures-timer",
+  "if-watch",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+  "libp2p-tls",
+  "quinn",
+@@ -5321,6 +5434,28 @@ dependencies = [
+  "tracing",
+ ]
+ 
++[[package]]
++name = "libp2p-swarm"
++version = "0.45.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d7dd6741793d2c1fb2088f67f82cf07261f25272ebe3c0b0c311e0c6b50e851a"
++dependencies = [
++ "either",
++ "fnv",
++ "futures",
++ "futures-timer",
++ "libp2p-core 0.42.0",
++ "libp2p-identity",
++ "lru 0.12.5",
++ "multistream-select",
++ "once_cell",
++ "rand 0.8.5",
++ "smallvec",
++ "tracing",
++ "void",
++ "web-time",
++]
++
+ [[package]]
+ name = "libp2p-swarm"
+ version = "0.47.0"
+@@ -5331,7 +5466,7 @@ dependencies = [
+  "fnv",
+  "futures",
+  "futures-timer",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+  "libp2p-swarm-derive",
+  "lru 0.12.5",
+@@ -5364,7 +5499,7 @@ dependencies = [
+  "futures-timer",
+  "if-watch",
+  "libc",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "socket2 0.5.10",
+  "tokio",
+  "tracing",
+@@ -5378,7 +5513,7 @@ checksum = "96ff65a82e35375cbc31ebb99cacbbf28cb6c4fefe26bf13756ddcf708d40080"
+ dependencies = [
+  "futures",
+  "futures-rustls",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "libp2p-identity",
+  "rcgen",
+  "ring",
+@@ -5398,8 +5533,8 @@ dependencies = [
+  "futures",
+  "futures-timer",
+  "igd-next",
+- "libp2p-core",
+- "libp2p-swarm",
++ "libp2p-core 0.43.1",
++ "libp2p-swarm 0.47.0",
+  "tokio",
+  "tracing",
+ ]
+@@ -5412,7 +5547,7 @@ checksum = "f15df094914eb4af272acf9adaa9e287baa269943f32ea348ba29cfb9bfc60d8"
+ dependencies = [
+  "either",
+  "futures",
+- "libp2p-core",
++ "libp2p-core 0.43.1",
+  "thiserror 2.0.17",
+  "tracing",
+  "yamux 0.12.1",
+@@ -5427,6 +5562,7 @@ checksum = "416f7e718bdb06000964960ffa43b4335ad4012ae8b99060261aa4a8088d5ccb"
+ dependencies = [
+  "bitflags 2.10.0",
+  "libc",
++ "redox_syscall",
+ ]
+ 
+ [[package]]
+@@ -5470,7 +5606,7 @@ dependencies = [
+  "environment",
+  "eth2",
+  "eth2_network_config",
+- "ethereum_hashing",
++ "ethereum_hashing 0.8.0",
+  "futures",
+  "initialized_validators",
+  "lighthouse_network",
+@@ -5517,14 +5653,14 @@ dependencies = [
+  "discv5",
+  "either",
+  "eth2",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "fixed_bytes",
+  "fnv",
+  "futures",
+  "hex",
+  "itertools 0.10.5",
+- "libp2p",
++ "libp2p 0.56.0",
+  "libp2p-gossipsub",
+  "libp2p-mplex",
+  "lighthouse_version",
+@@ -5843,7 +5979,7 @@ name = "merkle_proof"
+ version = "0.2.0"
+ dependencies = [
+  "alloy-primitives",
+- "ethereum_hashing",
++ "ethereum_hashing 0.8.0",
+  "fixed_bytes",
+  "proptest",
+  "safe_arith",
+@@ -5889,15 +6025,15 @@ dependencies = [
+  "arbitrary",
+  "context_deserialize",
+  "educe",
+- "ethereum_hashing",
+- "ethereum_ssz",
++ "ethereum_hashing 0.8.0",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "itertools 0.13.0",
+  "parking_lot",
+  "rayon",
+  "serde",
+  "smallvec",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "triomphe",
+  "typenum",
+  "vec_map",
+@@ -6233,7 +6369,7 @@ dependencies = [
+  "educe",
+  "eth2",
+  "eth2_network_config",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "execution_layer",
+  "fixed_bytes",
+  "fnv",
+@@ -6270,6 +6406,7 @@ dependencies = [
+  "tracing-subscriber",
+  "typenum",
+  "types",
++ "xatu",
+ ]
+ 
+ [[package]]
+@@ -6675,7 +6812,7 @@ dependencies = [
+  "bitvec",
+  "bls",
+  "educe",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "fixed_bytes",
+  "itertools 0.10.5",
+@@ -7185,7 +7322,7 @@ dependencies = [
+ name = "proto_array"
+ version = "0.2.0"
+ dependencies = [
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "fixed_bytes",
+  "safe_arith",
+@@ -7572,7 +7709,7 @@ dependencies = [
+  "wasm-bindgen-futures",
+  "wasm-streams",
+  "web-sys",
+- "webpki-roots",
++ "webpki-roots 1.0.4",
+ ]
+ 
+ [[package]]
+@@ -8433,7 +8570,7 @@ dependencies = [
+  "bls",
+  "byteorder",
+  "educe",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "filesystem",
+  "fixed_bytes",
+@@ -8454,7 +8591,7 @@ dependencies = [
+  "strum",
+  "tempfile",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "tree_hash_derive",
+  "typenum",
+  "types",
+@@ -8586,12 +8723,12 @@ dependencies = [
+  "context_deserialize",
+  "educe",
+  "ethereum_serde_utils",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "itertools 0.14.0",
+  "serde",
+  "serde_derive",
+  "smallvec",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "typenum",
+ ]
+ 
+@@ -8609,8 +8746,8 @@ dependencies = [
+  "beacon_chain",
+  "bls",
+  "educe",
+- "ethereum_hashing",
+- "ethereum_ssz",
++ "ethereum_hashing 0.8.0",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "fixed_bytes",
+  "int_to_bytes",
+@@ -8627,7 +8764,7 @@ dependencies = [
+  "test_random_derive",
+  "tokio",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "typenum",
+  "types",
+ ]
+@@ -8638,7 +8775,7 @@ version = "0.1.0"
+ dependencies = [
+  "beacon_chain",
+  "bls",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "fixed_bytes",
+  "state_processing",
+  "tokio",
+@@ -8660,7 +8797,7 @@ dependencies = [
+  "criterion",
+  "db-key",
+  "directory",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "fixed_bytes",
+  "itertools 0.10.5",
+@@ -8747,7 +8884,7 @@ version = "0.2.0"
+ dependencies = [
+  "alloy-primitives",
+  "criterion",
+- "ethereum_hashing",
++ "ethereum_hashing 0.8.0",
+  "fixed_bytes",
+ ]
+ 
+@@ -8866,6 +9003,17 @@ version = "1.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+ 
++[[package]]
++name = "tar"
++version = "0.4.44"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1d863878d212c87a19c1a610eb53bb01fe12951c0501cf5a0d65f724914a667a"
++dependencies = [
++ "filetime",
++ "libc",
++ "xattr",
++]
++
+ [[package]]
+ name = "target_check"
+ version = "0.1.0"
+@@ -9466,6 +9614,19 @@ dependencies = [
+  "tracing-serde",
+ ]
+ 
++[[package]]
++name = "tree_hash"
++version = "0.10.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ee44f4cef85f88b4dea21c0b1f58320bdf35715cf56d840969487cff00613321"
++dependencies = [
++ "alloy-primitives",
++ "ethereum_hashing 0.7.0",
++ "ethereum_ssz 0.9.1",
++ "smallvec",
++ "typenum",
++]
++
+ [[package]]
+ name = "tree_hash"
+ version = "0.12.0"
+@@ -9473,8 +9634,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "2db21caa355767db4fd6129876e5ae278a8699f4a6959b1e3e7aff610b532d52"
+ dependencies = [
+  "alloy-primitives",
+- "ethereum_hashing",
+- "ethereum_ssz",
++ "ethereum_hashing 0.8.0",
++ "ethereum_ssz 0.10.0",
+  "smallvec",
+  "typenum",
+ ]
+@@ -9537,9 +9698,9 @@ dependencies = [
+  "criterion",
+  "educe",
+  "eth2_interop_keypairs",
+- "ethereum_hashing",
++ "ethereum_hashing 0.8.0",
+  "ethereum_serde_utils",
+- "ethereum_ssz",
++ "ethereum_ssz 0.10.0",
+  "ethereum_ssz_derive",
+  "fixed_bytes",
+  "hex",
+@@ -9571,7 +9732,7 @@ dependencies = [
+  "test_random_derive",
+  "tokio",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "tree_hash_derive",
+  "typenum",
+ ]
+@@ -9684,6 +9845,22 @@ version = "0.9.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
+ 
++[[package]]
++name = "ureq"
++version = "2.12.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "02d1a66277ed75f640d608235660df48c8e3c19f3b4edb6a263315626cc3c01d"
++dependencies = [
++ "base64 0.22.1",
++ "flate2",
++ "log",
++ "once_cell",
++ "rustls 0.23.35",
++ "rustls-pki-types",
++ "url",
++ "webpki-roots 0.26.11",
++]
++
+ [[package]]
+ name = "url"
+ version = "2.5.7"
+@@ -9778,7 +9955,7 @@ dependencies = [
+  "lockfile",
+  "rand 0.9.2",
+  "tempfile",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "types",
+ ]
+ 
+@@ -9877,7 +10054,7 @@ dependencies = [
+  "slot_clock",
+  "tempfile",
+  "tokio",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "types",
+  "validator_http_api",
+  "zeroize",
+@@ -9907,7 +10084,7 @@ dependencies = [
+  "task_executor",
+  "tokio",
+  "tracing",
+- "tree_hash",
++ "tree_hash 0.12.0",
+  "types",
+  "validator_metrics",
+  "validator_store",
+@@ -9960,6 +10137,12 @@ version = "0.9.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+ 
++[[package]]
++name = "void"
++version = "1.0.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
++
+ [[package]]
+ name = "wait-timeout"
+ version = "0.2.1"
+@@ -10186,6 +10369,15 @@ dependencies = [
+  "zip",
+ ]
+ 
++[[package]]
++name = "webpki-roots"
++version = "0.26.11"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
++dependencies = [
++ "webpki-roots 1.0.4",
++]
++
+ [[package]]
+ name = "webpki-roots"
+ version = "1.0.4"
+@@ -10724,6 +10916,38 @@ dependencies = [
+  "time",
+ ]
+ 
++[[package]]
++name = "xattr"
++version = "1.6.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
++dependencies = [
++ "libc",
++ "rustix 1.1.2",
++]
++
++[[package]]
++name = "xatu"
++version = "0.1.0"
++dependencies = [
++ "chrono",
++ "crossbeam-channel",
++ "flate2",
++ "hex",
++ "libp2p 0.54.1",
++ "lighthouse_network",
++ "metrics",
++ "serde",
++ "serde_json",
++ "serde_yaml",
++ "tar",
++ "tokio",
++ "tracing",
++ "tree_hash 0.10.0",
++ "types",
++ "ureq",
++]
++
+ [[package]]
+ name = "xdelta3"
+ version = "0.1.5"
 diff --git a/Dockerfile b/Dockerfile
 index 8cc20ab..77fd313 100644
 --- a/Dockerfile
@@ -55,6 +1052,96 @@ index 5352814..5c8be60 100644
  account_utils = { workspace = true }
  beacon_chain = { workspace = true }
  bls = { workspace = true }
+diff --git a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
+index 9526921..b558fd6 100644
+--- a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
++++ b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
+@@ -39,6 +39,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
+         &self,
+         versioned_hashes: Vec<Hash256>,
+     ) -> Result<Vec<Option<BlobAndProofV1<T::EthSpec>>>, FetchEngineBlobError> {
++        // In optimistic mode, return no blobs since we have no EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            return Ok(vec![None; versioned_hashes.len()]);
++        }
++
+         let execution_layer = self
+             .chain
+             .execution_layer
+@@ -55,6 +60,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
+         &self,
+         versioned_hashes: Vec<Hash256>,
+     ) -> Result<Option<Vec<BlobAndProofV2<T::EthSpec>>>, FetchEngineBlobError> {
++        // In optimistic mode, return empty blobs since we have no EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            return Ok(Some(vec![]));
++        }
++
+         let execution_layer = self
+             .chain
+             .execution_layer
+diff --git a/beacon_node/execution_layer/src/engines.rs b/beacon_node/execution_layer/src/engines.rs
+index cc2bfcc..8d324cb 100644
+--- a/beacon_node/execution_layer/src/engines.rs
++++ b/beacon_node/execution_layer/src/engines.rs
+@@ -232,6 +232,16 @@ impl Engine {
+     /// Run the `EngineApi::upcheck` function if the node's last known state is not synced. This
+     /// might be used to recover the node if offline.
+     pub async fn upcheck(&self) {
++        // In optimistic mode, always report as synced without contacting EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            let mut state = self.state.write().await;
++            if **state != EngineStateInternal::Synced {
++                info!("Optimistic mode: marking execution engine as synced (no EL required)");
++            }
++            state.update(EngineStateInternal::Synced);
++            return;
++        }
++
+         let (state, cache_action) = match self.api.upcheck().await {
+             Ok(()) => {
+                 let mut state = self.state.write().await;
+diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
+index 34b1832..ba3af5e 100644
+--- a/beacon_node/execution_layer/src/lib.rs
++++ b/beacon_node/execution_layer/src/lib.rs
+@@ -69,6 +69,12 @@ mod payload_status;
+ pub mod test_utils;
+ pub mod versioned_hashes;
+ 
++/// Check if optimistic mode is enabled via environment variable.
++/// In optimistic mode, all EL calls are bypassed and blocks are accepted as valid.
++fn is_optimistic_mode() -> bool {
++    std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok()
++}
++
+ /// Indicates the default jwt authenticated execution endpoint.
+ pub const DEFAULT_EXECUTION_ENDPOINT: &str = "http://localhost:8551/";
+ 
+@@ -1372,6 +1378,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+         &self,
+         new_payload_request: NewPayloadRequest<'_, E>,
+     ) -> Result<PayloadStatus, Error> {
++        // Bypass EL validation in optimistic mode
++        if is_optimistic_mode() {
++            return Ok(PayloadStatus::Valid);
++        }
++
+         let _timer = metrics::start_timer_vec(
+             &metrics::EXECUTION_LAYER_REQUEST_TIMES,
+             &[metrics::NEW_PAYLOAD],
+@@ -1480,6 +1491,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+         current_slot: Slot,
+         head_block_root: Hash256,
+     ) -> Result<PayloadStatus, Error> {
++        // Bypass EL forkchoice in optimistic mode
++        if is_optimistic_mode() {
++            return Ok(PayloadStatus::Syncing);
++        }
++
+         let _timer = metrics::start_timer_vec(
+             &metrics::EXECUTION_LAYER_REQUEST_TIMES,
+             &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
 index 4eebda1..1cf640a 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
@@ -459,10 +1546,10 @@ index 0869b44..538b497 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index e4c7c6f..049e61c 100644
+index e4c7c6f..cb18e9b 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
-@@ -253,6 +253,14 @@ pub fn cli_app() -> Command {
+@@ -253,6 +253,24 @@ pub fn cli_app() -> Command {
                  .action(ArgAction::Set)
                  .display_order(0)
          )
@@ -472,6 +1559,16 @@ index e4c7c6f..049e61c 100644
 +                .value_name("FILE")
 +                .help("Path to a YAML configuration file for Xatu middleware. Xatu allows intercepting and modifying network messages for testing and debugging purposes.")
 +                .action(ArgAction::Set)
++                .display_order(0)
++        )
++        .arg(
++            Arg::new("optimistic")
++                .long("optimistic")
++                .action(ArgAction::SetTrue)
++                .help_heading(FLAG_HEADER)
++                .help("Enables optimistic mode by bypassing execution engine validation. \
++                       Lighthouse will accept all blocks as valid without an execution client. \
++                       WARNING: This disables critical safety checks - use only for testing/observation.")
 +                .display_order(0)
 +        )
          .arg(
@@ -497,18 +1594,24 @@ index 3d8a25e..cd1e970 100644
 +    }
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index c93016a..d2cde68 100644
+index c93016a..49bee3c 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -420,6 +420,15 @@ fn main() {
+@@ -420,6 +420,21 @@ fn main() {
  
      let matches = cli.get_matches();
  
 +    // Set XATU_CONFIG environment variable early if xatu-config is provided
++    // Set LIGHTHOUSE_OPTIMISTIC environment variable if --optimistic flag is set
 +    if let Some(("beacon_node", bn_matches)) = matches.subcommand() {
 +        if let Some(xatu_config_path) = bn_matches.get_one::<String>("xatu-config") {
 +            unsafe {
 +                std::env::set_var("XATU_CONFIG", xatu_config_path);
++            }
++        }
++        if bn_matches.get_flag("optimistic") {
++            unsafe {
++                std::env::set_var("LIGHTHOUSE_OPTIMISTIC", "1");
 +            }
 +        }
 +    }
