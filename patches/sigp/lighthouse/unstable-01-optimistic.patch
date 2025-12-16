@@ -128,6 +128,7 @@ index d2cde68..49bee3c 100644
 +            unsafe {
 +                std::env::set_var("LIGHTHOUSE_OPTIMISTIC", "1");
 +            }
++            eprintln!("WARNING: Optimistic mode enabled - execution engine validation is bypassed");
 +        }
      }
  
