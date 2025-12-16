@@ -19,7 +19,7 @@ index 8cc20ab..77fd313 100644
  RUN apt-get update && apt-get -y upgrade && apt-get install -y cmake libclang-dev
 +COPY . lighthouse
 -ARG FEATURES
-+ARG FEATURES=network/disable-backfill
++ARG FEATURES=disable-backfill
  ARG PROFILE=release
  ARG CARGO_USE_GIT_CLI=true
  ENV FEATURES=$FEATURES
@@ -48,9 +48,12 @@ diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
 index 5352814..5c8be60 100644
 --- a/beacon_node/Cargo.toml
 +++ b/beacon_node/Cargo.toml
-@@ -18,6 +18,7 @@ write_ssz_files = [
+@@ -17,7 +17,8 @@ write_ssz_files = [
+     "store/write_ssz_files",
+ ]
  testing = [] # Enables testing-only CLI flags
- 
++disable-backfill = ["network/disable-backfill"]
+
  [dependencies]
 +network = { workspace = true }
  account_utils = { workspace = true }
@@ -478,6 +481,19 @@ index e4c7c6f..049e61c 100644
          .arg(
              Arg::new("disable-upnp")
                  .long("disable-upnp")
+diff --git a/lighthouse/Cargo.toml b/lighthouse/Cargo.toml
+index 1234567..abcdefg 100644
+--- a/lighthouse/Cargo.toml
++++ b/lighthouse/Cargo.toml
+@@ -29,6 +29,8 @@ slasher-redb = ["slasher/redb"]
+ beacon-node-leveldb = ["store/leveldb"]
+ # Supports beacon node redb backend.
+ beacon-node-redb = ["store/redb"]
++# Disable historical block backfilling during sync.
++disable-backfill = ["beacon_node/disable-backfill"]
+
+ # Deprecated. This is now enabled by default on non windows targets.
+ jemalloc = []
 diff --git a/lighthouse/build.rs b/lighthouse/build.rs
 index 3d8a25e..cd1e970 100644
 --- a/lighthouse/build.rs
