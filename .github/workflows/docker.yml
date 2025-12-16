@@ -44,6 +44,11 @@ jobs:
         run: |
           ./dimhouse-build.sh -r "sigp/lighthouse" -b "unstable" --ci
 
+      - name: Copy xatu crate for Docker build
+        run: |
+          # save-patch.sh removes xatu during cleanup, so we need to copy it back
+          cp -r crates/xatu lighthouse/xatu
+
       - name: Verify xatu crate exists
         run: |
           echo "Checking lighthouse directory contents:"
@@ -104,6 +109,11 @@ jobs:
       - name: Run dimhouse build
         run: |
           ./dimhouse-build.sh -r "sigp/lighthouse" -b "unstable" --ci
+
+      - name: Copy xatu crate for Docker build
+        run: |
+          # save-patch.sh removes xatu during cleanup, so we need to copy it back
+          cp -r crates/xatu lighthouse/xatu
 
       - name: Verify xatu crate exists
         run: |
