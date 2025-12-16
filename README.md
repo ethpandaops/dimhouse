@@ -159,9 +159,72 @@ The configuration file should be based on [`example-xatu-config.yaml`](example-x
 ## Requirements
 
 - Git
-- Rust/Cargo (for building Lighthouse)
+- Rust/Cargo 1.88+ (for building Lighthouse with edition2024 support)
 - Bash
+- cmake (required for building native dependencies)
 - GitHub CLI (`gh`) for release creation in CI
+
+### macOS-Specific Requirements
+
+Building on macOS requires additional setup since pre-built xatu-sidecar libraries are only available for Linux:
+
+1. **Go 1.21+** - Required to build xatu-sidecar from source
+2. **Xcode Command Line Tools** - For `install_name_tool`
+
+## Local macOS Development
+
+The xatu-sidecar releases only include Linux binaries. For local macOS development, you need to build the library from source:
+
+### 1. Build xatu-sidecar library
+
+```bash
+# Clone and build xatu-sidecar
+cd /tmp
+git clone https://github.com/ethpandaops/xatu-sidecar.git
+cd xatu-sidecar
+CGO_ENABLED=1 go build -buildmode=c-shared -o libxatu.dylib .
+
+# Fix the install name for proper dynamic loading
+install_name_tool -id "@rpath/libxatu.dylib" libxatu.dylib
+```
+
+### 2. Build lighthouse with dimhouse patches
+
+```bash
+# Clone and apply patch
+./dimhouse-build.sh -r sigp/lighthouse -b unstable
+
+# The build will fail trying to download darwin binary, so manually copy the library:
+cp /tmp/xatu-sidecar/libxatu.dylib lighthouse/xatu/src/
+
+# Build lighthouse
+cd lighthouse
+cargo build --release
+```
+
+### 3. Run the binary
+
+The built binary will be at `lighthouse/target/release/lighthouse`. The `libxatu.dylib` must be in the same directory as the binary:
+
+```bash
+# Copy library next to binary
+cp lighthouse/xatu/src/libxatu.dylib lighthouse/target/release/
+
+# Run lighthouse
+./lighthouse/target/release/lighthouse --version
+```
+
+### Troubleshooting macOS Builds
+
+**Library not loaded error**: Ensure `libxatu.dylib` is in the same directory as the lighthouse binary and has the correct install name (`@rpath/libxatu.dylib`). Check with:
+```bash
+otool -D libxatu.dylib  # Should show: @rpath/libxatu.dylib
+otool -L lighthouse | grep xatu  # Should show: @rpath/libxatu.dylib
+```
+
+**Rust version too old**: Update with `rustup update stable` (needs 1.88+)
+
+**cmake not found**: Install with `brew install cmake`
 
 ## Notes
 

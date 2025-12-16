@@ -10,7 +10,15 @@ const XATU_SIDECAR_VERSION: &str = "v0.0.5";
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let lib_dir = Path::new(&manifest_dir).join("src");
-    let lib_path = lib_dir.join("libxatu.so");
+
+    // Use platform-appropriate library extension
+    let lib_ext = if cfg!(target_os = "macos") {
+        "dylib"
+    } else {
+        "so"
+    };
+    let lib_filename = format!("libxatu.{}", lib_ext);
+    let lib_path = lib_dir.join(&lib_filename);
 
     // Check if we need to download the library
     if !lib_path.exists() || should_update_library(&lib_path) {
@@ -31,21 +39,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parent()
         .unwrap();
 
-    let lib_file = lib_dir.join("libxatu.so");
-    let dest_file = target_dir.join(&profile).join("libxatu.so");
+    let lib_file = lib_dir.join(&lib_filename);
+    let dest_file = target_dir.join(&profile).join(&lib_filename);
 
     if lib_file.exists() {
         std::fs::copy(&lib_file, &dest_file)
-            .expect("Failed to copy libxatu.so to output directory");
+            .expect("Failed to copy libxatu to output directory");
+
+        // On macOS, fix the library install name to use @rpath for proper dynamic loading
+        #[cfg(target_os = "macos")]
+        {
+            use std::process::Command;
+            let status = Command::new("install_name_tool")
+                .args(["-id", "@rpath/libxatu.dylib", dest_file.to_str().unwrap()])
+                .status()
+                .expect("Failed to run install_name_tool");
+            if !status.success() {
+                panic!("install_name_tool failed to set install name");
+            }
+        }
     }
 
     // Set rpath to look in the same directory as the binary
     // These need to be passed to the final binary, not just this crate
-    println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
-    println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
-    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
-    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../lib");
-    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
+    #[cfg(target_os = "macos")]
+    {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../lib");
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
+        println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
+    }
 
     Ok(())
 }
@@ -99,11 +126,18 @@ fn download_xatu_sidecar(lib_dir: &Path) -> Result<(), Box<dyn std::error::Error
     let tar = flate2::read::GzDecoder::new(&data[..]);
     let mut archive = tar::Archive::new(tar);
 
+    // Determine output filename based on platform
+    let output_lib_name = if env::consts::OS == "macos" {
+        "libxatu.dylib"
+    } else {
+        "libxatu.so"
+    };
+
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
         if path.file_name() == Some(std::ffi::OsStr::new(lib_name)) {
-            let dest_path = lib_dir.join("libxatu.so"); // Always save as .so for consistency
+            let dest_path = lib_dir.join(output_lib_name);
             let mut dest_file = fs::File::create(&dest_path)?;
             std::io::copy(&mut entry, &mut dest_file)?;
 
@@ -114,6 +148,18 @@ fn download_xatu_sidecar(lib_dir: &Path) -> Result<(), Box<dyn std::error::Error
                 let mut perms = fs::metadata(&dest_path)?.permissions();
                 perms.set_mode(0o755);
                 fs::set_permissions(&dest_path, perms)?;
+            }
+
+            // On macOS, fix the library install name to use @rpath for proper dynamic loading
+            #[cfg(target_os = "macos")]
+            {
+                use std::process::Command;
+                let status = Command::new("install_name_tool")
+                    .args(["-id", "@rpath/libxatu.dylib", dest_path.to_str().unwrap()])
+                    .status()?;
+                if !status.success() {
+                    return Err("install_name_tool failed to set install name".into());
+                }
             }
 
             println!("cargo:warning=Successfully downloaded xatu-sidecar library");
