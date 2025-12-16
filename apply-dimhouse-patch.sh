@@ -40,38 +40,58 @@ if [ ! -d ".git" ]; then
     exit 1
 fi
 
-# Find the appropriate patch file with fallback logic
-find_patch_file() {
+# Find all applicable patch files (base + extensions like -optimistic)
+# Patches are applied in order: base.patch, then base-*.patch sorted alphabetically
+find_patch_files() {
     local org="$1"
     local repo="$2"
     local branch="$3"
-    
-    # Try exact match first
-    local exact_patch="$SCRIPT_DIR/patches/$org/$repo/$branch.patch"
-    if [ -f "$exact_patch" ]; then
-        echo "$exact_patch"
-        return 0
+    local patch_dir="$SCRIPT_DIR/patches/$org/$repo"
+    local patches=()
+
+    # Try exact match for base patch first
+    local base_patch="$patch_dir/$branch.patch"
+    if [ -f "$base_patch" ]; then
+        patches+=("$base_patch")
+    else
+        # Fallback to default
+        local default_patch="$SCRIPT_DIR/patches/sigp/lighthouse/unstable.patch"
+        if [ -f "$default_patch" ]; then
+            echo "Base patch not found at patches/$org/$repo/$branch.patch, using default..." >&2
+            patches+=("$default_patch")
+            patch_dir="$SCRIPT_DIR/patches/sigp/lighthouse"
+            branch="unstable"
+        fi
     fi
-    
-    # Fallback to default
-    local default_patch="$SCRIPT_DIR/patches/sigp/lighthouse/unstable.patch"
-    if [ -f "$default_patch" ]; then
-        echo "Patch file not found at patches/$org/$repo/$branch.patch, using default..." >&2
-        echo "$default_patch"
-        return 0
+
+    # Look for extension patches (e.g., unstable-optimistic.patch)
+    # Only if base patch was found
+    if [ ${#patches[@]} -gt 0 ]; then
+        for ext_patch in "$patch_dir/$branch"-*.patch; do
+            if [ -f "$ext_patch" ]; then
+                patches+=("$ext_patch")
+            fi
+        done
     fi
-    
-    return 1
+
+    # Return patches (newline separated for easier parsing)
+    printf '%s\n' "${patches[@]}"
 }
 
-# Find the patch file
-PATCH_FILE=$(find_patch_file "$ORG" "$REPO" "$BRANCH")
-if [ -z "$PATCH_FILE" ]; then
-    echo "Error: No patch file found"
+# Find all patch files
+PATCH_FILES=()
+while IFS= read -r line; do
+    [ -n "$line" ] && PATCH_FILES+=("$line")
+done < <(find_patch_files "$ORG" "$REPO" "$BRANCH")
+if [ ${#PATCH_FILES[@]} -eq 0 ]; then
+    echo "Error: No patch files found"
     exit 1
 fi
 
-echo "Using patch file: $PATCH_FILE"
+echo "Found ${#PATCH_FILES[@]} patch file(s):"
+for pf in "${PATCH_FILES[@]}"; do
+    echo "  - $(basename "$pf")"
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -80,45 +100,45 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Apply the patch with better error handling
-echo -e "${BLUE}Applying patch...${NC}"
+# Apply each patch in sequence
+PATCHES_APPLIED=0
+for PATCH_FILE in "${PATCH_FILES[@]}"; do
+    echo ""
+    echo -e "${BLUE}═══ Applying patch: $(basename "$PATCH_FILE") ═══${NC}"
+    echo -e "${BLUE}  Current directory: $(pwd)${NC}"
 
-# First check if patch can be applied
-echo -e "${BLUE}Running patch check...${NC}"
-echo -e "${BLUE}  Current directory: $(pwd)${NC}"
-echo -e "${BLUE}  Patch file: $PATCH_FILE${NC}"
+    # Run the patch check and capture both output and exit code
+    echo -e "${BLUE}  Running: git apply --check \"$PATCH_FILE\"${NC}"
 
-# Run the patch check and capture both output and exit code
-echo -e "${BLUE}  Running: git apply --check \"$PATCH_FILE\"${NC}"
-
-# Try running without redirection first to see if it completes
-if ! git apply --check "$PATCH_FILE" 2>&1; then
-    PATCH_EXIT_CODE=1
-    echo -e "${YELLOW}  Patch check failed, getting detailed error...${NC}"
-    # Now capture the output for analysis
-    PATCH_CHECK=$(git apply --check "$PATCH_FILE" 2>&1 || true)
-else
-    PATCH_EXIT_CODE=0
-    PATCH_CHECK=""
-fi
-
-# If patch check failed, show the error immediately
-if [ $PATCH_EXIT_CODE -ne 0 ]; then
-    echo -e "${RED}Patch check failed with errors:${NC}"
-    echo "$PATCH_CHECK"
-fi
-
-if [ $PATCH_EXIT_CODE -eq 0 ]; then
-    # Patch can be applied cleanly
-    echo -e "${GREEN}✓ Patch check passed, applying...${NC}"
-    git apply "$PATCH_FILE"
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Patch applied successfully${NC}"
+    # Try running without redirection first to see if it completes
+    if ! git apply --check "$PATCH_FILE" 2>&1; then
+        PATCH_EXIT_CODE=1
+        echo -e "${YELLOW}  Patch check failed, getting detailed error...${NC}"
+        # Now capture the output for analysis
+        PATCH_CHECK=$(git apply --check "$PATCH_FILE" 2>&1 || true)
     else
-        echo -e "${RED}✗ Patch application failed unexpectedly${NC}"
-        exit 1
+        PATCH_EXIT_CODE=0
+        PATCH_CHECK=""
     fi
-else
+
+    # If patch check failed, show the error immediately
+    if [ $PATCH_EXIT_CODE -ne 0 ]; then
+        echo -e "${RED}Patch check failed with errors:${NC}"
+        echo "$PATCH_CHECK"
+    fi
+
+    if [ $PATCH_EXIT_CODE -eq 0 ]; then
+        # Patch can be applied cleanly
+        echo -e "${GREEN}✓ Patch check passed, applying...${NC}"
+        git apply "$PATCH_FILE"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Patch applied successfully${NC}"
+            ((PATCHES_APPLIED++))
+        else
+            echo -e "${RED}✗ Patch application failed unexpectedly${NC}"
+            exit 1
+        fi
+    else
     # Check if it's because patch is already applied
     echo -e "${YELLOW}⚠ Patch cannot be applied directly${NC}"
     
@@ -261,6 +281,7 @@ else
         fi
     fi
 fi
+done  # End of patch loop
 
 # Copy the xatu crate
 echo -e "${BLUE}Copying xatu crate...${NC}"
@@ -279,16 +300,17 @@ cp -r "$SCRIPT_DIR/crates/xatu" .
 
 # Final success message
 echo ""
-if [ "$PATCH_ALREADY_APPLIED" = true ]; then
+if [ "$PATCHES_APPLIED" -eq 0 ]; then
     echo -e "${YELLOW}═══════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  Dimhouse patch was already applied${NC}"
+    echo -e "${YELLOW}  Dimhouse patches were already applied${NC}"
     echo -e "${YELLOW}═══════════════════════════════════════════════════════${NC}"
-    echo -e "  ${BLUE}→ Patch location:${NC} $PATCH_FILE"
     echo -e "  ${BLUE}→ xatu crate refreshed at:${NC} $(pwd)/xatu"
 else
     echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  Successfully applied dimhouse patch!${NC}"
+    echo -e "${GREEN}  Successfully applied ${PATCHES_APPLIED} dimhouse patch(es)!${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
-    echo -e "  ${GREEN}✓ Applied patch:${NC} $PATCH_FILE"
+    for pf in "${PATCH_FILES[@]}"; do
+        echo -e "  ${GREEN}✓ Applied:${NC} $(basename "$pf")"
+    done
     echo -e "  ${GREEN}✓ Copied xatu crate to:${NC} $(pwd)/xatu"
 fi
