@@ -478,16 +478,23 @@ index e4c7c6f..049e61c 100644
              Arg::new("disable-upnp")
                  .long("disable-upnp")
 diff --git a/lighthouse/build.rs b/lighthouse/build.rs
-index 3d8a25e..3167c5b 100644
+index 3d8a25e..cd1e970 100644
 --- a/lighthouse/build.rs
 +++ b/lighthouse/build.rs
-@@ -1,2 +1,6 @@
+@@ -1,2 +1,13 @@
  // This is a stub for determining the build profile, see `build_profile_name`.
 -fn main() {}
 +fn main() {
-+    // Set rpath so the binary can find libxatu.so in the same directory
-+    println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
-+    println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
++    // Set rpath so the binary can find libxatu in the same directory
++    #[cfg(target_os = "macos")]
++    {
++        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
++    }
++    #[cfg(not(target_os = "macos"))]
++    {
++        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
++        println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
++    }
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
 index c93016a..d2cde68 100644
