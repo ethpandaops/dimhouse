@@ -40,7 +40,7 @@ if [ ! -d ".git" ]; then
     exit 1
 fi
 
-# Find all applicable patch files (base + extensions like -optimistic)
+# Find all applicable patch files (base + extensions like -01-optimistic)
 # Patches are applied in order: base.patch, then base-*.patch sorted alphabetically
 find_patch_files() {
     local org="$1"
@@ -49,32 +49,22 @@ find_patch_files() {
     local patch_dir="$SCRIPT_DIR/patches/$org/$repo"
     local patches=()
 
-    # Try exact match for base patch first
+    # Base patch is required
     local base_patch="$patch_dir/$branch.patch"
     if [ -f "$base_patch" ]; then
         patches+=("$base_patch")
     else
-        # Fallback to default
-        local default_patch="$SCRIPT_DIR/patches/sigp/lighthouse/unstable.patch"
-        if [ -f "$default_patch" ]; then
-            echo "Base patch not found at patches/$org/$repo/$branch.patch, using default..." >&2
-            patches+=("$default_patch")
-            patch_dir="$SCRIPT_DIR/patches/sigp/lighthouse"
-            branch="unstable"
+        echo "Error: Base patch not found at patches/$org/$repo/$branch.patch" >&2
+        return 1
+    fi
+
+    # Look for extension patches (e.g., unstable-01-optimistic.patch)
+    for ext_patch in "$patch_dir/$branch"-*.patch; do
+        if [ -f "$ext_patch" ]; then
+            patches+=("$ext_patch")
         fi
-    fi
+    done
 
-    # Look for extension patches (e.g., unstable-optimistic.patch)
-    # Only if base patch was found
-    if [ ${#patches[@]} -gt 0 ]; then
-        for ext_patch in "$patch_dir/$branch"-*.patch; do
-            if [ -f "$ext_patch" ]; then
-                patches+=("$ext_patch")
-            fi
-        done
-    fi
-
-    # Return patches (newline separated for easier parsing)
     printf '%s\n' "${patches[@]}"
 }
 
