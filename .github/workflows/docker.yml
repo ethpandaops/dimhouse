@@ -7,69 +7,16 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      patch_filter:
-        description: 'Optional: Build only patches matching this pattern (e.g., "unstable")'
-        required: false
-        type: string
 
 env:
   REGISTRY: docker.io
   IMAGE_NAME: ethpandaops/dimhouse
 
 jobs:
-  discover-patches:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      has_patches: ${{ steps.set-matrix.outputs.has_patches }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Discover base patch files
-        id: set-matrix
-        run: |
-          # Find base patches only (exclude extension patches like *-01-*.patch, *-02-*.patch)
-          patches=$(find patches -name "*.patch" -type f | while read patch; do
-            # Skip extension patches (contain -NN- pattern before .patch)
-            if echo "$patch" | grep -qE '-[0-9]+-[^/]+\.patch$'; then
-              continue
-            fi
-
-            # Extract org/repo/branch from path like patches/sigp/lighthouse/unstable.patch
-            path_parts=$(echo "$patch" | sed 's|^patches/||; s|\.patch$||')
-            org=$(echo "$path_parts" | cut -d'/' -f1)
-            repo=$(echo "$path_parts" | cut -d'/' -f2)
-            branch=$(echo "$path_parts" | cut -d'/' -f3-)
-
-            # Sanitize branch name for Docker tags (replace / with -)
-            tag_branch=$(echo "$branch" | tr '/' '-')
-
-            echo "{\"org\":\"$org\",\"repo\":\"$repo\",\"branch\":\"$branch\",\"tag_branch\":\"$tag_branch\",\"patch_file\":\"$patch\"}"
-          done | jq -sc '.')
-
-          # Apply filter if provided
-          if [ -n "${{ github.event.inputs.patch_filter }}" ]; then
-            patches=$(echo "$patches" | jq -c --arg filter "${{ github.event.inputs.patch_filter }}" '[.[] | select(.branch | contains($filter))]')
-          fi
-
-          count=$(echo "$patches" | jq 'length')
-          echo "Found $count base patches: $patches"
-          echo "matrix={\"include\":$patches}" >> $GITHUB_OUTPUT
-
-          if [ "$count" -gt 0 ]; then
-            echo "has_patches=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_patches=false" >> $GITHUB_OUTPUT
-          fi
-
   build-amd64:
-    needs: discover-patches
-    if: needs.discover-patches.outputs.has_patches == 'true'
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.discover-patches.outputs.matrix) }}
+    outputs:
+      version: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -89,14 +36,13 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.org }}-${{ matrix.repo }}-${{ matrix.branch }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.org }}-${{ matrix.repo }}-${{ matrix.branch }}-
             ${{ runner.os }}-${{ runner.arch }}-cargo-
 
       - name: Run dimhouse build
         run: |
-          ./dimhouse-build.sh -r "${{ matrix.org }}/${{ matrix.repo }}" -b "${{ matrix.branch }}" --ci
+          ./dimhouse-build.sh -r "sigp/lighthouse" -b "unstable" --ci
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -123,17 +69,14 @@ jobs:
           file: lighthouse/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_branch }}-${{ steps.version.outputs.tag }}-amd64
-          cache-from: type=gha,scope=${{ matrix.tag_branch }}-amd64
-          cache-to: type=gha,mode=max,scope=${{ matrix.tag_branch }}-amd64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64
+          cache-from: type=gha,scope=amd64
+          cache-to: type=gha,mode=max,scope=amd64
 
   build-arm64:
-    needs: discover-patches
-    if: needs.discover-patches.outputs.has_patches == 'true'
     runs-on: ubuntu-24.04-arm
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.discover-patches.outputs.matrix) }}
+    outputs:
+      version: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -153,14 +96,13 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.org }}-${{ matrix.repo }}-${{ matrix.branch }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-cargo-${{ matrix.org }}-${{ matrix.repo }}-${{ matrix.branch }}-
             ${{ runner.os }}-${{ runner.arch }}-cargo-
 
       - name: Run dimhouse build
         run: |
-          ./dimhouse-build.sh -r "${{ matrix.org }}/${{ matrix.repo }}" -b "${{ matrix.branch }}" --ci
+          ./dimhouse-build.sh -r "sigp/lighthouse" -b "unstable" --ci
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -187,17 +129,13 @@ jobs:
           file: lighthouse/Dockerfile
           platforms: linux/arm64
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_branch }}-${{ steps.version.outputs.tag }}-arm64
-          cache-from: type=gha,scope=${{ matrix.tag_branch }}-arm64
-          cache-to: type=gha,mode=max,scope=${{ matrix.tag_branch }}-arm64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64
+          cache-from: type=gha,scope=arm64
+          cache-to: type=gha,mode=max,scope=arm64
 
   create-manifest:
-    needs: [discover-patches, build-amd64, build-arm64]
-    if: always() && needs.discover-patches.outputs.has_patches == 'true' && needs.build-amd64.result == 'success' && needs.build-arm64.result == 'success'
+    needs: [build-amd64, build-arm64]
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.discover-patches.outputs.matrix) }}
     steps:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -208,53 +146,33 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Determine version tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          fi
-
       - name: Create multi-arch manifest
         env:
-          TAG_BRANCH: ${{ matrix.tag_branch }}
-          VERSION: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ needs.build-amd64.outputs.version }}
         run: |
-          AMD64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-${VERSION}-amd64"
-          ARM64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-${VERSION}-arm64"
+          AMD64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64"
+          ARM64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64"
 
           # Create version-specific manifest
-          echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-${VERSION}"
-          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-${VERSION} \
+          echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
+          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
             ${AMD64_IMAGE} ${ARM64_IMAGE}
 
-          # For releases, also create latest tag for this branch
-          if [ "${{ github.event_name }}" == "release" ]; then
-            echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-latest"
-            docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-latest \
-              ${AMD64_IMAGE} ${ARM64_IMAGE}
-          fi
-
-          # For master pushes, also create latest tag
-          if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/master" ]; then
-            echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-latest"
-            docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-latest \
+          # Create latest tag for releases and master pushes
+          if [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
               ${AMD64_IMAGE} ${ARM64_IMAGE}
           fi
 
       - name: Summary
         env:
-          TAG_BRANCH: ${{ matrix.tag_branch }}
-          VERSION: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ needs.build-amd64.outputs.version }}
         run: |
           echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Patch:** ${{ matrix.org }}/${{ matrix.repo }} @ ${{ matrix.branch }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Images:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-${VERSION}\`" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.event_name }}" == "release" ] || ([ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/master" ]); then
-            echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG_BRANCH}-latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
           fi
