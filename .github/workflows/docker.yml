@@ -44,8 +44,14 @@ jobs:
         run: |
           ./dimhouse-build.sh -r "sigp/lighthouse" -b "unstable" --ci
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Verify xatu crate exists
+        run: |
+          echo "Checking lighthouse directory contents:"
+          ls -la lighthouse/
+          echo "Checking xatu directory:"
+          ls -la lighthouse/xatu/
+          echo "Checking xatu Cargo.toml:"
+          cat lighthouse/xatu/Cargo.toml | head -20
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -63,15 +69,10 @@ jobs:
           fi
 
       - name: Build and push amd64 image
-        uses: docker/build-push-action@v5
-        with:
-          context: lighthouse
-          file: lighthouse/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64
-          cache-from: type=gha,scope=amd64
-          cache-to: type=gha,mode=max,scope=amd64
+        run: |
+          cd lighthouse
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64 .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64
 
   build-arm64:
     runs-on: ubuntu-24.04-arm
@@ -104,8 +105,14 @@ jobs:
         run: |
           ./dimhouse-build.sh -r "sigp/lighthouse" -b "unstable" --ci
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Verify xatu crate exists
+        run: |
+          echo "Checking lighthouse directory contents:"
+          ls -la lighthouse/
+          echo "Checking xatu directory:"
+          ls -la lighthouse/xatu/
+          echo "Checking xatu Cargo.toml:"
+          cat lighthouse/xatu/Cargo.toml | head -20
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -123,15 +130,10 @@ jobs:
           fi
 
       - name: Build and push arm64 image
-        uses: docker/build-push-action@v5
-        with:
-          context: lighthouse
-          file: lighthouse/Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64
-          cache-from: type=gha,scope=arm64
-          cache-to: type=gha,mode=max,scope=arm64
+        run: |
+          cd lighthouse
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64 .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64
 
   create-manifest:
     needs: [build-amd64, build-arm64]
@@ -143,9 +145,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Create multi-arch manifest
         env:
           VERSION: ${{ needs.build-amd64.outputs.version }}
@@ -155,14 +154,16 @@ jobs:
 
           # Create version-specific manifest
           echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
-          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
+          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
             ${AMD64_IMAGE} ${ARM64_IMAGE}
+          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
 
           # Create latest tag for releases and master pushes
           if [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; then
             echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-            docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
               ${AMD64_IMAGE} ${ARM64_IMAGE}
+            docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           fi
 
       - name: Summary
