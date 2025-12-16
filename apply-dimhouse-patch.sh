@@ -123,7 +123,7 @@ for PATCH_FILE in "${PATCH_FILES[@]}"; do
         git apply "$PATCH_FILE"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ Patch applied successfully${NC}"
-            ((PATCHES_APPLIED++))
+            ((++PATCHES_APPLIED))
         else
             echo -e "${RED}✗ Patch application failed unexpectedly${NC}"
             exit 1
