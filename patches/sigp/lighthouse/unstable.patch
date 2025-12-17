@@ -48,9 +48,8 @@ diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
 index 5352814..5c8be60 100644
 --- a/beacon_node/Cargo.toml
 +++ b/beacon_node/Cargo.toml
-@@ -17,7 +17,8 @@ write_ssz_files = [
-     "store/write_ssz_files",
- ]
+@@ -17,7 +17,9 @@ write_ssz_files = [
+ ] # Writes debugging .ssz files to /tmp during block processing.
  testing = [] # Enables testing-only CLI flags
 +disable-backfill = ["network/disable-backfill"]
 
@@ -485,15 +484,13 @@ diff --git a/lighthouse/Cargo.toml b/lighthouse/Cargo.toml
 index 1234567..abcdefg 100644
 --- a/lighthouse/Cargo.toml
 +++ b/lighthouse/Cargo.toml
-@@ -29,6 +29,8 @@ slasher-redb = ["slasher/redb"]
- beacon-node-leveldb = ["store/leveldb"]
+@@ -34,4 +34,6 @@ beacon-node-leveldb = ["store/leveldb"]
  # Supports beacon node redb backend.
  beacon-node-redb = ["store/redb"]
 +# Disable historical block backfilling during sync.
 +disable-backfill = ["beacon_node/disable-backfill"]
-
- # Deprecated. This is now enabled by default on non windows targets.
- jemalloc = []
+ # Supports console subscriber for debugging
+ console-subscriber = ["console-subscriber/default"]
 diff --git a/lighthouse/build.rs b/lighthouse/build.rs
 index 3d8a25e..cd1e970 100644
 --- a/lighthouse/build.rs
