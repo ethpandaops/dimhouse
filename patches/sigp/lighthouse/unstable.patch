@@ -11,14 +11,14 @@ index efd7916..5dea445 100644
 +/xatu/src/libxatu.so
 +/xatu/src/libxatu.h
 diff --git a/Dockerfile b/Dockerfile
-index 8cc20ab..77fd313 100644
+index 8cc20ab..c7873b3 100644
 --- a/Dockerfile
 +++ b/Dockerfile
 @@ -1,19 +1,13 @@
  FROM rust:1.88.0-bullseye AS builder
  RUN apt-get update && apt-get -y upgrade && apt-get install -y cmake libclang-dev
-+COPY . lighthouse
 -ARG FEATURES
++COPY . lighthouse
 +ARG FEATURES=disable-backfill
  ARG PROFILE=release
  ARG CARGO_USE_GIT_CLI=true
@@ -45,14 +45,15 @@ index 8cc20ab..77fd313 100644
 +COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
 +
 diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
-index 5352814..5c8be60 100644
+index 5352814..838f843 100644
 --- a/beacon_node/Cargo.toml
 +++ b/beacon_node/Cargo.toml
-@@ -17,7 +17,9 @@ write_ssz_files = [
+@@ -16,8 +16,10 @@ write_ssz_files = [
+     "beacon_chain/write_ssz_files",
  ] # Writes debugging .ssz files to /tmp during block processing.
  testing = [] # Enables testing-only CLI flags
 +disable-backfill = ["network/disable-backfill"]
-
+ 
  [dependencies]
 +network = { workspace = true }
  account_utils = { workspace = true }
@@ -481,16 +482,18 @@ index e4c7c6f..049e61c 100644
              Arg::new("disable-upnp")
                  .long("disable-upnp")
 diff --git a/lighthouse/Cargo.toml b/lighthouse/Cargo.toml
-index 1234567..abcdefg 100644
+index ebe00c9..08b0861 100644
 --- a/lighthouse/Cargo.toml
 +++ b/lighthouse/Cargo.toml
-@@ -34,4 +34,6 @@ beacon-node-leveldb = ["store/leveldb"]
+@@ -33,6 +33,8 @@ slasher-redb = ["slasher/redb"]
+ beacon-node-leveldb = ["store/leveldb"]
  # Supports beacon node redb backend.
  beacon-node-redb = ["store/redb"]
 +# Disable historical block backfilling during sync.
 +disable-backfill = ["beacon_node/disable-backfill"]
  # Supports console subscriber for debugging
  console-subscriber = ["console-subscriber/default"]
+ # Force the use of the system memory allocator rather than jemalloc.
 diff --git a/lighthouse/build.rs b/lighthouse/build.rs
 index 3d8a25e..cd1e970 100644
 --- a/lighthouse/build.rs
