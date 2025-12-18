@@ -90,12 +90,25 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Source the shared patch validation function
+source "$SCRIPT_DIR/scripts/validate-patch.sh"
+
 # Apply each patch in sequence
 PATCHES_APPLIED=0
 for PATCH_FILE in "${PATCH_FILES[@]}"; do
     echo ""
     echo -e "${BLUE}═══ Applying patch: $(basename "$PATCH_FILE") ═══${NC}"
     echo -e "${BLUE}  Current directory: $(pwd)${NC}"
+
+    # Validate patch file structure first
+    echo -e "${BLUE}  Validating patch file structure...${NC}"
+    if ! validate_patch_file "$PATCH_FILE"; then
+        echo -e "${RED}✗ Patch file is corrupt or malformed${NC}"
+        echo -e "${RED}  This usually means the patch file was truncated or incorrectly generated.${NC}"
+        echo -e "${RED}  Please regenerate the patch using save-patch.sh${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}  ✓ Patch file structure is valid${NC}"
 
     # Run the patch check and capture both output and exit code
     echo -e "${BLUE}  Running: git apply --check \"$PATCH_FILE\"${NC}"
@@ -131,21 +144,15 @@ for PATCH_FILE in "${PATCH_FILES[@]}"; do
     else
     # Check if it's because patch is already applied
     echo -e "${YELLOW}⚠ Patch cannot be applied directly${NC}"
-    
-    # Check if this is because the patch is already partially or fully applied
-    echo -e "${BLUE}Checking current state of patch application...${NC}"
-    
-    # Check for key indicators that the patch has been applied
-    # Look for xatu references in key files
-    if grep -q "xatu" beacon_node/network/Cargo.toml 2>/dev/null && \
-       grep -q "xatu_chain" beacon_node/network/src/router.rs 2>/dev/null; then
-        echo -e "${GREEN}✓ Patch appears to be already applied (xatu integration found)${NC}"
-        echo -e "${BLUE}  Skipping patch application.${NC}"
-        # Set a flag to indicate patch was already applied
-        PATCH_ALREADY_APPLIED=true
+
+    # Check if this is because the patch is already fully applied
+    # IMPORTANT: Only use git's reverse check - don't use heuristics that might
+    # incorrectly match content from OTHER patches
+    echo -e "${BLUE}Checking if patch is already applied (reverse check)...${NC}"
+
     # Try reverse check to see if patch is fully applied
-    elif git apply --check --reverse "$PATCH_FILE" 2>/dev/null; then
-        echo -e "${GREEN}✓ Patch is already fully applied!${NC}"
+    if git apply --check --reverse "$PATCH_FILE" 2>/dev/null; then
+        echo -e "${GREEN}✓ Patch is already fully applied (verified by reverse check)${NC}"
         echo -e "${BLUE}  Skipping patch application.${NC}"
         # Set a flag to indicate patch was already applied
         PATCH_ALREADY_APPLIED=true

@@ -113,9 +113,9 @@ diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
 index d2cde68..49bee3c 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -421,12 +421,18 @@ fn main() {
+@@ -421,13 +421,20 @@ fn main() {
      let matches = cli.get_matches();
- 
+
      // Set XATU_CONFIG environment variable early if xatu-config is provided
 +    // Set LIGHTHOUSE_OPTIMISTIC environment variable if --optimistic flag is set
      if let Some(("beacon_node", bn_matches)) = matches.subcommand() {
@@ -131,5 +131,6 @@ index d2cde68..49bee3c 100644
 +            eprintln!("WARNING: Optimistic mode enabled - execution engine validation is bypassed");
 +        }
      }
- 
+
      // Configure the allocator early in the process, before it has the chance to use the default values for
+     // anything important.

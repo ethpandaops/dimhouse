@@ -1,0 +1,52 @@
+name: Validate Patch Files
+
+on:
+  push:
+    paths:
+      - 'patches/**/*.patch'
+      - 'scripts/validate-patch.sh'
+  pull_request:
+    paths:
+      - 'patches/**/*.patch'
+      - 'scripts/validate-patch.sh'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate all patch files
+        run: |
+          set -e
+
+          GREEN='\033[0;32m'
+          RED='\033[0;31m'
+          NC='\033[0m'
+
+          # Source the shared validation function
+          source scripts/validate-patch.sh
+
+          # Find and validate all patch files
+          FAILED=0
+          PASSED=0
+
+          for patch in $(find patches -name "*.patch" -type f | sort); do
+              echo -n "Validating $patch... "
+              if validate_patch_file "$patch"; then
+                  echo -e "${GREEN}✓ valid${NC}"
+                  PASSED=$((PASSED + 1))
+              else
+                  FAILED=$((FAILED + 1))
+              fi
+          done
+
+          echo ""
+          echo "=== Summary ==="
+          echo -e "${GREEN}Passed: $PASSED${NC}"
+          if [ $FAILED -gt 0 ]; then
+              echo -e "${RED}Failed: $FAILED${NC}"
+              exit 1
+          else
+              echo "All patch files are valid!"
+          fi
