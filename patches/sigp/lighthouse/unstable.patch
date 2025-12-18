@@ -59,6 +59,96 @@ index 5352814..838f843 100644
  account_utils = { workspace = true }
  beacon_chain = { workspace = true }
  bls = { workspace = true }
+diff --git a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
+index 9526921..b558fd6 100644
+--- a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
++++ b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
+@@ -39,6 +39,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
+         &self,
+         versioned_hashes: Vec<Hash256>,
+     ) -> Result<Vec<Option<BlobAndProofV1<T::EthSpec>>>, FetchEngineBlobError> {
++        // In optimistic mode, return no blobs since we have no EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            return Ok(vec![None; versioned_hashes.len()]);
++        }
++
+         let execution_layer = self
+             .chain
+             .execution_layer
+@@ -55,6 +60,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
+         &self,
+         versioned_hashes: Vec<Hash256>,
+     ) -> Result<Option<Vec<BlobAndProofV2<T::EthSpec>>>, FetchEngineBlobError> {
++        // In optimistic mode, return empty blobs since we have no EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            return Ok(Some(vec![]));
++        }
++
+         let execution_layer = self
+             .chain
+             .execution_layer
+diff --git a/beacon_node/execution_layer/src/engines.rs b/beacon_node/execution_layer/src/engines.rs
+index cc2bfcc..8d324cb 100644
+--- a/beacon_node/execution_layer/src/engines.rs
++++ b/beacon_node/execution_layer/src/engines.rs
+@@ -232,6 +232,16 @@ impl Engine {
+     /// Run the `EngineApi::upcheck` function if the node's last known state is not synced. This
+     /// might be used to recover the node if offline.
+     pub async fn upcheck(&self) {
++        // In optimistic mode, always report as synced without contacting EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            let mut state = self.state.write().await;
++            if **state != EngineStateInternal::Synced {
++                info!("Optimistic mode: marking execution engine as synced (no EL required)");
++            }
++            state.update(EngineStateInternal::Synced);
++            return;
++        }
++
+         let (state, cache_action) = match self.api.upcheck().await {
+             Ok(()) => {
+                 let mut state = self.state.write().await;
+diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
+index 554668d..345bc5a 100644
+--- a/beacon_node/execution_layer/src/lib.rs
++++ b/beacon_node/execution_layer/src/lib.rs
+@@ -69,6 +69,12 @@ mod payload_status;
+ pub mod test_utils;
+ pub mod versioned_hashes;
+ 
++/// Check if optimistic mode is enabled via environment variable.
++/// In optimistic mode, all EL calls are bypassed and blocks are accepted as valid.
++fn is_optimistic_mode() -> bool {
++    std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok()
++}
++
+ /// Indicates the default jwt authenticated execution endpoint.
+ pub const DEFAULT_EXECUTION_ENDPOINT: &str = "http://localhost:8551/";
+ 
+@@ -1366,6 +1372,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+         &self,
+         new_payload_request: NewPayloadRequest<'_, E>,
+     ) -> Result<PayloadStatus, Error> {
++        // Bypass EL validation in optimistic mode
++        if is_optimistic_mode() {
++            return Ok(PayloadStatus::Valid);
++        }
++
+         let _timer = metrics::start_timer_vec(
+             &metrics::EXECUTION_LAYER_REQUEST_TIMES,
+             &[metrics::NEW_PAYLOAD],
+@@ -1474,6 +1485,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+         current_slot: Slot,
+         head_block_root: Hash256,
+     ) -> Result<PayloadStatus, Error> {
++        // Bypass EL forkchoice in optimistic mode
++        if is_optimistic_mode() {
++            return Ok(PayloadStatus::Syncing);
++        }
++
+         let _timer = metrics::start_timer_vec(
+             &metrics::EXECUTION_LAYER_REQUEST_TIMES,
+             &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
 index 4eebda1..1cf640a 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
@@ -463,10 +553,10 @@ index 0869b44..538b497 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index e4c7c6f..049e61c 100644
+index e4c7c6f..cb18e9b 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
-@@ -253,6 +253,14 @@ pub fn cli_app() -> Command {
+@@ -253,6 +253,24 @@ pub fn cli_app() -> Command {
                  .action(ArgAction::Set)
                  .display_order(0)
          )
@@ -476,6 +566,16 @@ index e4c7c6f..049e61c 100644
 +                .value_name("FILE")
 +                .help("Path to a YAML configuration file for Xatu middleware. Xatu allows intercepting and modifying network messages for testing and debugging purposes.")
 +                .action(ArgAction::Set)
++                .display_order(0)
++        )
++        .arg(
++            Arg::new("optimistic")
++                .long("optimistic")
++                .action(ArgAction::SetTrue)
++                .help_heading(FLAG_HEADER)
++                .help("Enables optimistic mode by bypassing execution engine validation. \
++                       Lighthouse will accept all blocks as valid without an execution client. \
++                       WARNING: This disables critical safety checks - use only for testing/observation.")
 +                .display_order(0)
 +        )
          .arg(
@@ -514,19 +614,26 @@ index 3d8a25e..cd1e970 100644
 +    }
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index c93016a..d2cde68 100644
+index c93016a..3c69c14 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -420,6 +420,15 @@ fn main() {
+@@ -420,6 +420,22 @@ fn main() {
  
      let matches = cli.get_matches();
  
 +    // Set XATU_CONFIG environment variable early if xatu-config is provided
++    // Set LIGHTHOUSE_OPTIMISTIC environment variable if --optimistic flag is set
 +    if let Some(("beacon_node", bn_matches)) = matches.subcommand() {
 +        if let Some(xatu_config_path) = bn_matches.get_one::<String>("xatu-config") {
 +            unsafe {
 +                std::env::set_var("XATU_CONFIG", xatu_config_path);
 +            }
++        }
++        if bn_matches.get_flag("optimistic") {
++            unsafe {
++                std::env::set_var("LIGHTHOUSE_OPTIMISTIC", "1");
++            }
++            eprintln!("WARNING: Optimistic mode enabled - execution engine validation is bypassed");
 +        }
 +    }
 +
