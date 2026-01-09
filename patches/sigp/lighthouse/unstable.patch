@@ -614,7 +614,7 @@ index 3d8a25e..cd1e970 100644
 +    }
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index c93016a..3c69c14 100644
+index 2592d2e..88cc8bc 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
 @@ -420,6 +420,22 @@ fn main() {
