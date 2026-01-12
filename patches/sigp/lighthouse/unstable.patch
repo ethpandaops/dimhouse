@@ -361,7 +361,7 @@ index 60fe094..0f0f079 100644
              }
          }
      }
-@@ -325,9 +346,117 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -325,9 +346,131 @@ impl<T: BeaconChainTypes> Router<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -370,24 +370,38 @@ index 60fe094..0f0f079 100644
 +        message_size: usize,
          should_process: bool,
      ) {
-+        // Send to xatu if enabled and node is synced
++        // Send to xatu if enabled and node is synced (or optimistic mode allows it)
 +        if let Some(xatu_chain) = &self.xatu_chain {
 +            // Check sync state
 +            let sync_state = self.network_globals.sync_state.read().clone();
 +
++            // Check if optimistic sync is enabled - if so, allow events during finalized sync
++            let is_optimistic = self.network_beacon_processor.chain.config.optimistic_finalized_sync;
++
 +            // Allow events only when synced or backfilling (head is synced, just filling history)
++            // Also allow during finalized sync when optimistic mode is enabled
 +            let sync_ok = match &sync_state {
 +                SyncState::Synced => true,
 +                SyncState::BackFillSyncing { .. } => true,
 +                SyncState::CustodyBackFillSyncing { .. } => true,
 +                SyncState::SyncingHead { .. } => true,
 +                SyncState::SyncingFinalized { .. } => {
-+                    trace!("Skipping Xatu event - still syncing finalized chain");
-+                    false
++                    if is_optimistic {
++                        trace!("Allowing Xatu event during finalized sync - optimistic mode enabled");
++                        true
++                    } else {
++                        trace!("Skipping Xatu event - still syncing finalized chain");
++                        false
++                    }
 +                }
 +                SyncState::SyncTransition => {
-+                    trace!("Skipping Xatu event - in sync transition");
-+                    false
++                    if is_optimistic {
++                        trace!("Allowing Xatu event during sync transition - optimistic mode enabled");
++                        true
++                    } else {
++                        trace!("Skipping Xatu event - in sync transition");
++                        false
++                    }
 +                }
 +                SyncState::Stalled => {
 +                    trace!("Skipping Xatu event - sync stalled, no useful peers");
