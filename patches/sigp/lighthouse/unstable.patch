@@ -109,7 +109,7 @@ index cc2bfcc..8d324cb 100644
              Ok(()) => {
                  let mut state = self.state.write().await;
 diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
-index 554668d..345bc5a 100644
+index 37b514f..f3c5641 100644
 --- a/beacon_node/execution_layer/src/lib.rs
 +++ b/beacon_node/execution_layer/src/lib.rs
 @@ -69,6 +69,12 @@ mod payload_status;
