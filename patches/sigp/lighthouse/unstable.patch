@@ -88,7 +88,7 @@ index 9526921..b558fd6 100644
              .chain
              .execution_layer
 diff --git a/beacon_node/execution_layer/src/engines.rs b/beacon_node/execution_layer/src/engines.rs
-index cc2bfcc..8d324cb 100644
+index 3e6f78a..74a6eaf 100644
 --- a/beacon_node/execution_layer/src/engines.rs
 +++ b/beacon_node/execution_layer/src/engines.rs
 @@ -232,6 +232,16 @@ impl Engine {
@@ -109,7 +109,7 @@ index cc2bfcc..8d324cb 100644
              Ok(()) => {
                  let mut state = self.state.write().await;
 diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
-index 37b514f..f3c5641 100644
+index 33b83aa..7bfd1d6 100644
 --- a/beacon_node/execution_layer/src/lib.rs
 +++ b/beacon_node/execution_layer/src/lib.rs
 @@ -69,6 +69,12 @@ mod payload_status;
