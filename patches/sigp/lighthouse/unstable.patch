@@ -252,10 +252,10 @@ index 231e717..6a2f635 100644
                  ErrorKind::InvalidData,
                  "ssz_snappy encoded data > max_compressed_len",
 diff --git a/beacon_node/network/Cargo.toml b/beacon_node/network/Cargo.toml
-index cba61e0..323d690 100644
+index 78dc0c4..61da51c 100644
 --- a/beacon_node/network/Cargo.toml
 +++ b/beacon_node/network/Cargo.toml
-@@ -49,6 +49,9 @@ tracing-subscriber = { workspace = true }
+@@ -48,6 +48,9 @@ tracing-subscriber = { workspace = true }
  typenum = { workspace = true }
  types = { workspace = true }
  
@@ -596,7 +596,7 @@ index e4c7c6f..cb18e9b 100644
              Arg::new("disable-upnp")
                  .long("disable-upnp")
 diff --git a/lighthouse/Cargo.toml b/lighthouse/Cargo.toml
-index ebe00c9..08b0861 100644
+index 000c6fd..c4b3ead 100644
 --- a/lighthouse/Cargo.toml
 +++ b/lighthouse/Cargo.toml
 @@ -33,6 +33,8 @@ slasher-redb = ["slasher/redb"]
@@ -628,10 +628,10 @@ index 3d8a25e..cd1e970 100644
 +    }
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 2592d2e..88cc8bc 100644
+index 53946ed..b94ce79 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
-@@ -420,6 +420,22 @@ fn main() {
+@@ -421,6 +421,22 @@ fn main() {
  
      let matches = cli.get_matches();
  
