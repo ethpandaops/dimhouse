@@ -1,4 +1,4 @@
 /lighthouse/
 /new.diff
-/crates/xatu/src/libxatu.so
-/crates/xatu/src/libxatu.h
+/overlay/xatu/src/libxatu.so
+/overlay/xatu/src/libxatu.h

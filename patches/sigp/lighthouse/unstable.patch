@@ -1,66 +1,5 @@
-diff --git a/.gitignore b/.gitignore
-index efd7916..5dea445 100644
---- a/.gitignore
-+++ b/.gitignore
-@@ -17,3 +17,7 @@ genesis.ssz
- 
- # VSCode
- /.vscode
-+
-+# Xatu build artifacts
-+/xatu/src/libxatu.so
-+/xatu/src/libxatu.h
-diff --git a/Dockerfile b/Dockerfile
-index 8cc20ab..c7873b3 100644
---- a/Dockerfile
-+++ b/Dockerfile
-@@ -1,19 +1,13 @@
- FROM rust:1.88.0-bullseye AS builder
- RUN apt-get update && apt-get -y upgrade && apt-get install -y cmake libclang-dev
--ARG FEATURES
-+COPY . lighthouse
-+ARG FEATURES=disable-backfill
- ARG PROFILE=release
- ARG CARGO_USE_GIT_CLI=true
- ENV FEATURES=$FEATURES
- ENV PROFILE=$PROFILE
- ENV CARGO_NET_GIT_FETCH_WITH_CLI=$CARGO_USE_GIT_CLI
--ENV CARGO_INCREMENTAL=1
--
--WORKDIR /lighthouse
--COPY . .
--# Persist the registry and target file across builds. See: https://docs.docker.com/build/cache/optimize/#use-cache-mounts
--RUN --mount=type=cache,target=/usr/local/cargo/registry \
--    --mount=type=cache,target=/lighthouse/target \
--    make
-+RUN cd lighthouse && make
- 
- FROM ubuntu:22.04
- RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-recommends \
-@@ -22,3 +16,6 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-reco
-   && apt-get clean \
-   && rm -rf /var/lib/apt/lists/*
- COPY --from=builder /usr/local/cargo/bin/lighthouse /usr/local/bin/lighthouse
-+ENV LD_LIBRARY_PATH=/usr/local/lib
-+COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
-+
-diff --git a/beacon_node/Cargo.toml b/beacon_node/Cargo.toml
-index 5352814..838f843 100644
---- a/beacon_node/Cargo.toml
-+++ b/beacon_node/Cargo.toml
-@@ -16,8 +16,10 @@ write_ssz_files = [
-     "beacon_chain/write_ssz_files",
- ] # Writes debugging .ssz files to /tmp during block processing.
- testing = [] # Enables testing-only CLI flags
-+disable-backfill = ["network/disable-backfill"]
- 
- [dependencies]
-+network = { workspace = true }
- account_utils = { workspace = true }
- beacon_chain = { workspace = true }
- bls = { workspace = true }
 diff --git a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
-index 9526921..b558fd6 100644
+index a5dc7d7..7d5ed7c 100644
 --- a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 +++ b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 @@ -39,6 +39,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
@@ -150,7 +89,7 @@ index 33b83aa..7bfd1d6 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 8b52096..c95a7b4 100644
+index 3d709ed..f5f0e97 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -98,6 +98,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -191,18 +130,18 @@ index eea8782..2ac0e0b 100644
  };
 +pub use pubsub::{get_compressed_size};
 diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
-index 231e717..6a2f635 100644
+index 1256790..71dbe6a 100644
 --- a/beacon_node/lighthouse_network/src/types/pubsub.rs
 +++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
-@@ -18,6 +18,7 @@ use types::{
-     SignedContributionAndProof, SignedVoluntaryExit, SingleAttestation, SubnetId,
-     SyncCommitteeMessage, SyncSubnetId,
- };
+@@ -5,6 +5,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
+ use libp2p::gossipsub;
+ use snap::raw::{Decoder, Encoder, decompress_len};
+ use ssz::{Decode, Encode};
 +use std::collections::HashMap;
- 
- #[derive(Debug, Clone, PartialEq)]
- pub enum PubsubMessage<E: EthSpec> {
-@@ -49,6 +50,27 @@ pub enum PubsubMessage<E: EthSpec> {
+ use std::io::{Error, ErrorKind};
+ use std::sync::Arc;
+ use types::{
+@@ -58,6 +59,27 @@ pub enum PubsubMessage<E: EthSpec> {
      LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
  }
  
@@ -230,7 +169,7 @@ index 231e717..6a2f635 100644
  // Implements the `DataTransform` trait of gossipsub to employ snappy compression
  pub struct SnappyTransform {
      /// Sets the maximum size we allow gossipsub messages to decompress to.
-@@ -72,8 +94,19 @@ impl gossipsub::DataTransform for SnappyTransform {
+@@ -81,8 +103,19 @@ impl gossipsub::DataTransform for SnappyTransform {
          &self,
          raw_message: gossipsub::RawMessage,
      ) -> Result<gossipsub::Message, std::io::Error> {
@@ -251,20 +190,6 @@ index 231e717..6a2f635 100644
              return Err(Error::new(
                  ErrorKind::InvalidData,
                  "ssz_snappy encoded data > max_compressed_len",
-diff --git a/beacon_node/network/Cargo.toml b/beacon_node/network/Cargo.toml
-index 78dc0c4..61da51c 100644
---- a/beacon_node/network/Cargo.toml
-+++ b/beacon_node/network/Cargo.toml
-@@ -48,6 +48,9 @@ tracing-subscriber = { workspace = true }
- typenum = { workspace = true }
- types = { workspace = true }
- 
-+# Xatu dependency
-+xatu = { path = "../../xatu" }
-+
- [dev-dependencies]
- bls = { workspace = true }
- eth2 = { workspace = true }
 diff --git a/beacon_node/network/src/lib.rs b/beacon_node/network/src/lib.rs
 index 2a7fedb..908f1fe 100644
 --- a/beacon_node/network/src/lib.rs
@@ -277,7 +202,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 60fe094..bdfbc85 100644
+index 8373dec..a07614c 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -12,7 +12,9 @@ use crate::sync::SyncMessage;
@@ -494,7 +419,7 @@ index 60fe094..bdfbc85 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index 0869b44..538b497 100644
+index af56b80..b5175cf 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -42,6 +42,7 @@ use types::{
@@ -567,7 +492,7 @@ index 0869b44..538b497 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index e4c7c6f..cb18e9b 100644
+index 61dccc9..648286b 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -253,6 +253,24 @@ pub fn cli_app() -> Command {
@@ -595,19 +520,6 @@ index e4c7c6f..cb18e9b 100644
          .arg(
              Arg::new("disable-upnp")
                  .long("disable-upnp")
-diff --git a/lighthouse/Cargo.toml b/lighthouse/Cargo.toml
-index 000c6fd..c4b3ead 100644
---- a/lighthouse/Cargo.toml
-+++ b/lighthouse/Cargo.toml
-@@ -33,6 +33,8 @@ slasher-redb = ["slasher/redb"]
- beacon-node-leveldb = ["store/leveldb"]
- # Supports beacon node redb backend.
- beacon-node-redb = ["store/redb"]
-+# Disable historical block backfilling during sync.
-+disable-backfill = ["beacon_node/disable-backfill"]
- # Supports console subscriber for debugging
- console-subscriber = ["console-subscriber/default"]
- # Force the use of the system memory allocator rather than jemalloc.
 diff --git a/lighthouse/build.rs b/lighthouse/build.rs
 index 3d8a25e..cd1e970 100644
 --- a/lighthouse/build.rs

@@ -1,165 +1,200 @@
 # Dimhouse
 
-Automated patch management and build system for integrating Xatu Sidecar observability into Lighthouse.
+Patch-based overlay for integrating [Xatu Sidecar](https://github.com/ethpandaops/xatu-sidecar) observability into [Lighthouse](https://github.com/sigp/lighthouse).
 
 ## Overview
 
-Dimhouse is a patch management system that integrates [Xatu Sidecar](https://github.com/ethpandaops/xatu-sidecar) observability into the [Lighthouse](https://github.com/sigp/lighthouse) Ethereum consensus client. It maintains patches that inject the Xatu Sidecar crate into Lighthouse builds, enabling enhanced network monitoring and metrics collection for the [Xatu](https://github.com/ethpandaops/xatu) data collection pipeline.
+Dimhouse uses a **patch + overlay** approach instead of maintaining a full fork. The repo stores only custom code and small patches; upstream Lighthouse is cloned fresh each build.
 
-### Key Features
-
-- **Xatu Sidecar Integration**: Seamlessly adds Xatu Sidecar observability capabilities to Lighthouse
-- **Patch Management**: Maintains patches for different Lighthouse versions (branches, tags, commits)
-- **Automated Updates**: CI/CD workflows to keep patches current with upstream changes
-- **Multi-version Support**: Track and build multiple versions simultaneously
-- **Release Automation**: Automatic GitHub releases for updated patches
-
-## Directory Structure
+### Repository Structure
 
 ```
-├── .github/workflows/         # GitHub Actions workflows
-│   ├── check-patches.yml      # Automated patch checking and updating
-│   ├── add-patch.yml          # Manual patch addition workflow
-│   └── list-patches.yml       # List all available patches
-├── crates/                    # Source crates to be integrated
-│   └── xatu/                  # Xatu Sidecar crate for Lighthouse integration
-├── patches/                   # Patch files organized by org/repo/ref
-│   └── sigp/
-│       └── lighthouse/
-│           └── unstable.patch # Default patch for Lighthouse
-├── dimhouse-build.sh          # Main build script
-├── apply-dimhouse-patch.sh    # Helper script to apply patches
-└── example-xatu-config.yaml   # Xatu configuration file
+dimhouse/
+├── overlay/                      # Custom code (copied into upstream clone)
+│   └── xatu/                     # Xatu Sidecar crate for Lighthouse integration
+├── patches/
+│   └── sigp/lighthouse/
+│       ├── unstable.patch              # Base patch: gossip hooks, xatu init, CLI flag
+│       └── unstable-01-optimistic.patch # Extension: bypass EL validation for observation
+├── ci/
+│   ├── Dockerfile.ethpandaops    # Custom Dockerfile (replaces upstream)
+│   └── disable-upstream-workflows.sh
+├── .github/workflows/
+│   ├── check-patches.yml         # Daily: verify patches apply + build
+│   ├── docker.yml                # On push/release: build + push Docker image
+│   └── validate-patches.yml      # On PR: validate patch file structure
+├── scripts/
+│   ├── dimhouse-build.sh         # Full orchestrator: clone -> patch -> build
+│   ├── apply-dimhouse-patch.sh   # Apply patches + overlay + deps
+│   ├── save-patch.sh             # Regenerate patches from modified clone
+│   ├── update-deps.sh            # Cargo.toml dep/feature injection via sed
+│   └── validate-patch.sh         # Patch file structural validation
+├── example-xatu-config.yaml      # Xatu configuration template
+└── .gitignore                    # Ignore lighthouse/ working directory
 ```
 
-## Scripts
+## Quick Start
 
-### dimhouse-build.sh
-
-Main build script that handles the full workflow: clone, patch, build, and update patches.
+### Build
 
 ```bash
-# Usage
-./dimhouse-build.sh -r <org/repo> -b <branch/tag/commit> [--ci]
+# Full build: clone upstream -> apply patches -> build binary
+./scripts/dimhouse-build.sh -r sigp/lighthouse -b unstable
 
-# Examples
-./dimhouse-build.sh -r sigp/lighthouse -b unstable
-./dimhouse-build.sh -r sigp/lighthouse -b v4.5.0
-./dimhouse-build.sh -r sigp/lighthouse -b a1b2c3d
-
-# CI mode (non-interactive, auto-approves changes)
-./dimhouse-build.sh -r sigp/lighthouse -b unstable --ci
+# The binary will be at lighthouse/target/release/lighthouse
 ```
 
-**Options:**
-- `-r, --repo`: Repository in format `org/repo`
-- `-b, --branch`: Branch name, tag, or commit hash
-- `--ci`: Run in CI mode (non-interactive, auto-clean, auto-update patches)
-
-### apply-dimhouse-patch.sh
-
-Helper script to apply patches to an existing repository.
+### Docker
 
 ```bash
-# Usage
-./apply-dimhouse-patch.sh <org/repo> <branch/tag/commit> [target_dir]
+# Prepare patched source (skip Rust build, let Docker handle it)
+./scripts/dimhouse-build.sh -r sigp/lighthouse -b unstable --skip-build
 
-# Examples
-./apply-dimhouse-patch.sh sigp/lighthouse unstable
-./apply-dimhouse-patch.sh sigp/lighthouse v4.5.0 /path/to/lighthouse
+# Build Docker image from the patched source
+cd lighthouse && docker build -t ethpandaops/dimhouse:latest .
 ```
 
-## Patch Management
-
-### Patch Storage
-
-Patches are stored in `patches/<org>/<repo>/<ref>.patch` where `ref` can be:
-- Branch name: `unstable.patch`
-- Tag: `v4.5.0.patch`
-- Commit: `a1b2c3d.patch`
-
-### Fallback Mechanism
-
-The system uses a fallback mechanism when applying patches:
-1. First tries to find an exact match: `patches/<org>/<repo>/<ref>.patch`
-2. Falls back to default: `patches/sigp/lighthouse/unstable.patch`
-
-### Automatic Updates
-
-When running `dimhouse-build.sh`:
-- If the build succeeds and the patch has changed, you'll be prompted to update it
-- In CI mode (`--ci`), patches are automatically updated without prompting
-- New patches are created automatically for new branches/tags/commits
-
-## GitHub Actions Workflows
-
-### Automated Patch Checking (`check-patches.yml`)
-
-Runs daily (2 AM UTC) or manually to:
-- Discover all existing patches
-- Build each patch in parallel
-- Auto-commit updated patches if changes are detected
-- Create GitHub releases for each updated patch
-
-**Triggers:**
-- Schedule: Daily at 2 AM UTC
-- Manual: Via GitHub Actions UI
-
-### Manual Patch Addition (`add-patch.yml`)
-
-Allows manual addition of new patches via GitHub Actions UI.
-
-**Inputs:**
-- `repository`: Repository in `org/repo` format
-- `ref`: Branch, tag, or commit hash
-- `patch_name`: Optional custom patch filename
-- `force_rebuild`: Force overwrite existing patches
-
-**Example:** Adding a patch for a specific Lighthouse release:
-1. Go to Actions → "Add New Patch"
-2. Enter: `sigp/lighthouse` and `v4.5.0`
-3. Run workflow
-
-### Patch Inventory (`list-patches.yml`)
-
-Lists all available patches in a table format.
-
-**Triggers:**
-- Manual: Via GitHub Actions UI
-- Automatic: When patches are modified
-
-## Releases
-
-The CI system automatically creates GitHub releases for updated patches with tags following the format:
-```
-<org>-<repo>-<ref>-<short_commit_hash>
-```
-
-Example: `sigp-lighthouse-unstable-a3f5e92`
-
-Each release includes:
-- The patch file as an artifact
-- Build details and commit information
-- Application instructions
-
-## Configuration
-
-The [`example-xatu-config.yaml`](example-xatu-config.yaml) file contains configuration for the Xatu Sidecar. This file is referenced by the environment variable `XATU_CONFIG` when running the patched Lighthouse binary with Xatu Sidecar integration.
-
-### Running the Dimhouse-built Client
-
-To run the Lighthouse client built with Dimhouse patches and enable Xatu Sidecar observability:
+### Run
 
 ```bash
 lighthouse beacon_node --xatu-config /path/to/xatu-config.yaml [other options]
 ```
 
-The configuration file should be based on [`example-xatu-config.yaml`](example-xatu-config.yaml) and customized for your deployment needs.
+The configuration file should be based on [`example-xatu-config.yaml`](example-xatu-config.yaml).
+
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `dimhouse-build.sh` | Full orchestrator: clone upstream, apply patches + overlay, build |
+| `apply-dimhouse-patch.sh` | Apply patches to an existing lighthouse clone + copy overlay + deps |
+| `save-patch.sh` | Regenerate patches from a modified lighthouse clone |
+| `update-deps.sh` | Inject Cargo.toml dependencies and features via sed |
+| `validate-patch.sh` | Validate patch file structure (hunk counts, etc.) |
+| `disable-upstream-workflows.sh` | Rename upstream CI workflows to `.disabled` |
+
+### dimhouse-build.sh
+
+```bash
+./scripts/dimhouse-build.sh -r <org/repo> -b <branch> [-c <commit>] [--ci] [--skip-build]
+```
+
+**Options:**
+- `-r, --repo`: Repository in format `org/repo`
+- `-b, --branch`: Branch name, tag, or commit hash
+- `-c, --commit`: Pin to specific upstream commit SHA
+- `--ci`: CI mode (non-interactive, auto-clean, auto-update patches)
+- `--skip-build`: Skip `cargo build`, exit after applying patches (for Docker CI)
+
+## How It Works
+
+### Custom Code as Overlay
+
+`overlay/xatu/` is the Xatu Sidecar crate, **copied** into the upstream clone at build time. It is never part of the patch.
+
+### Dependencies via Script
+
+Instead of patching `Cargo.toml` files (which break on every upstream dependency change), `update-deps.sh` uses idempotent sed commands to inject:
+
+- `xatu = { path = "../../xatu" }` into `beacon_node/network/Cargo.toml`
+- `network = { workspace = true }` and `disable-backfill` feature into `beacon_node/Cargo.toml`
+- `disable-backfill` feature into `lighthouse/Cargo.toml`
+
+### CI Workflow Disabling
+
+Instead of patching workflow renames, a simple script renames all non-dimhouse workflows to `.disabled`.
+
+### Dockerfile as Overlay
+
+Instead of patching the upstream Dockerfile, `ci/Dockerfile.ethpandaops` is copied over the upstream Dockerfile during apply.
+
+### Patches
+
+The actual patch surface is minimal (Rust source only):
+- **`unstable.patch`** (~490 lines): Adds gossip message size tracking, xatu chain initialization, gossip event forwarding, `--xatu-config` CLI flag, and rpath setup
+- **`unstable-01-optimistic.patch`** (~130 lines): Bypasses EL validation for observation-only nodes
+
+## Development
+
+### Adding a new feature
+
+#### New files (overlay)
+
+Self-contained new code goes in `overlay/xatu/`. These files are copied verbatim into the upstream clone at build time.
+
+```bash
+vim overlay/xatu/new_feature.rs
+git add overlay/
+git commit -m "feat: add new feature"
+```
+
+#### Modifying upstream files (patch)
+
+If your feature requires changing existing upstream Rust source:
+
+```bash
+# 1. Build to get the working upstream clone
+./scripts/dimhouse-build.sh -r sigp/lighthouse -b unstable
+
+# 2. Edit upstream files in the clone
+vim lighthouse/beacon_node/network/src/router.rs
+
+# 3. Regenerate the patch
+./scripts/save-patch.sh -r sigp/lighthouse -b unstable lighthouse
+
+# 4. Commit the updated patch
+git add patches/
+git commit -m "feat: add new-feature wiring to base patch"
+```
+
+Changes are folded into `unstable.patch`. If the change is logically separate, create a new extension patch named `unstable-02-your-feature.patch` and it will be picked up automatically in alphabetical order.
+
+#### New dependency
+
+Edit `scripts/update-deps.sh` and add the sed injection for the new Cargo.toml entry.
+
+> **Tip:** Most features are overlay files + maybe a new dependency. Touching upstream files should be rare and minimal -- the less patch surface, the fewer sync conflicts.
+
+### Fixing a patch conflict
+
+When upstream changes the same lines our patches touch, `apply-dimhouse-patch.sh` will fail. To fix:
+
+```bash
+# 1. Run the build -- it will show exactly which hunks failed
+./scripts/dimhouse-build.sh -r sigp/lighthouse -b unstable
+
+# 2. Fix the conflicts in the upstream clone
+vim lighthouse/beacon_node/network/src/router.rs
+
+# 3. Regenerate the patch
+./scripts/save-patch.sh -r sigp/lighthouse -b unstable lighthouse
+
+# 4. Commit the updated patch
+git add patches/
+git commit -m "fix: update patches for upstream changes"
+```
+
+### Dropping a patch
+
+Extension patches are independently droppable. If upstream incorporates a fix:
+
+```bash
+git rm patches/sigp/lighthouse/unstable-01-optimistic.patch
+git commit -m "chore: drop optimistic patch, merged upstream"
+```
+
+## CI
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `check-patches.yml` | Daily (cron) | Clones upstream, applies patches, builds. Auto-commits if patches needed updating |
+| `docker.yml` | Push to master / release | Builds + pushes multi-arch Docker image to `ethpandaops/dimhouse:<tag>` |
+| `validate-patches.yml` | PR | Validates patch file structure (hunk counts, etc.) |
 
 ## Requirements
 
-- Git
 - Rust/Cargo 1.88+ (for building Lighthouse with edition2024 support)
+- Git
 - Bash
 - cmake (required for building native dependencies)
 - GitHub CLI (`gh`) for release creation in CI
@@ -178,7 +213,6 @@ The xatu-sidecar releases only include Linux binaries. For local macOS developme
 ### 1. Build xatu-sidecar library
 
 ```bash
-# Clone and build xatu-sidecar
 cd /tmp
 git clone https://github.com/ethpandaops/xatu-sidecar.git
 cd xatu-sidecar
@@ -191,8 +225,7 @@ install_name_tool -id "@rpath/libxatu.dylib" libxatu.dylib
 ### 2. Build lighthouse with dimhouse patches
 
 ```bash
-# Clone and apply patch
-./dimhouse-build.sh -r sigp/lighthouse -b unstable
+./scripts/dimhouse-build.sh -r sigp/lighthouse -b unstable
 
 # The build will fail trying to download darwin binary, so manually copy the library:
 cp /tmp/xatu-sidecar/libxatu.dylib lighthouse/xatu/src/
@@ -207,10 +240,7 @@ cargo build --release
 The built binary will be at `lighthouse/target/release/lighthouse`. The `libxatu.dylib` must be in the same directory as the binary:
 
 ```bash
-# Copy library next to binary
 cp lighthouse/xatu/src/libxatu.dylib lighthouse/target/release/
-
-# Run lighthouse
 ./lighthouse/target/release/lighthouse --version
 ```
 
@@ -225,22 +255,3 @@ otool -L lighthouse | grep xatu  # Should show: @rpath/libxatu.dylib
 **Rust version too old**: Update with `rustup update stable` (needs 1.88+)
 
 **cmake not found**: Install with `brew install cmake`
-
-## Notes
-
-- The `lighthouse/` directory is git-ignored and used as a working directory
-- Patches automatically exclude the xatu crate directory (it's copied separately)
-- Cargo.lock changes are excluded from patches to avoid conflicts
-- CI mode (`--ci`) enables fully automated operation without user prompts
-
-## Contributing
-
-1. Fork the repository
-2. Add or modify patches as needed
-3. Test locally with `dimhouse-build.sh`
-4. Submit a pull request
-
-Patches should be tested to ensure they:
-- Apply cleanly to the target version
-- Build successfully
-- Maintain the intended Xatu Sidecar integration functionality
