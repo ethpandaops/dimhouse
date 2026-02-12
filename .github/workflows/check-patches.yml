@@ -70,7 +70,7 @@ jobs:
           echo "Building ${{ matrix.org }}/${{ matrix.repo }} on branch ${{ matrix.branch }}"
           
           # Run the build script in CI mode
-          ./dimhouse-build.sh -r "${{ matrix.org }}/${{ matrix.repo }}" -b "${{ matrix.branch }}" --ci
+          ./scripts/dimhouse-build.sh -r "${{ matrix.org }}/${{ matrix.repo }}" -b "${{ matrix.branch }}" --ci
           
           # Check if patch was updated
           if git diff --quiet "${{ matrix.patch_file }}"; then
