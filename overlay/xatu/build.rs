@@ -5,7 +5,7 @@ use std::path::Path;
 
 // Version of xatu-sidecar to download from GitHub releases
 // Update this when new versions are released: https://github.com/ethpandaops/xatu-sidecar/releases
-const XATU_SIDECAR_VERSION: &str = "v0.0.5";
+const XATU_SIDECAR_VERSION: &str = "v0.0.6";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -43,8 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dest_file = target_dir.join(&profile).join(&lib_filename);
 
     if lib_file.exists() {
-        std::fs::copy(&lib_file, &dest_file)
-            .expect("Failed to copy libxatu to output directory");
+        std::fs::copy(&lib_file, &dest_file).expect("Failed to copy libxatu to output directory");
 
         // On macOS, fix the library install name to use @rpath for proper dynamic loading
         #[cfg(target_os = "macos")]

@@ -30,6 +30,7 @@ dimhouse/
 │   ├── update-deps.sh            # Cargo.toml dep/feature injection via sed
 │   └── validate-patch.sh         # Patch file structural validation
 ├── example-xatu-config.yaml      # Xatu configuration template
+├── kurtosis-config.yaml          # Kurtosis testnet configuration
 └── .gitignore                    # Ignore lighthouse/ working directory
 ```
 
@@ -181,6 +182,61 @@ Extension patches are independently droppable. If upstream incorporates a fix:
 ```bash
 git rm patches/sigp/lighthouse/unstable-01-optimistic.patch
 git commit -m "chore: drop optimistic patch, merged upstream"
+```
+
+## Testing with Kurtosis
+
+Run a local multi-client Ethereum testnet to verify xatu sidecar integration end-to-end.
+
+### Prerequisites
+
+- [Kurtosis CLI](https://docs.kurtosis.com/install/) installed
+- Docker running
+- Dimhouse Docker image built locally (see [Docker](#docker) section above)
+
+### Run
+
+```bash
+# Build the Docker image first (if not already built)
+./scripts/dimhouse-build.sh -r sigp/lighthouse -b unstable --skip-build
+cd lighthouse && docker build -f Dockerfile -t ethpandaops/dimhouse:latest . && cd ..
+
+# Run the testnet (ethereum-package is fetched automatically by kurtosis)
+kurtosis run github.com/ethpandaops/ethereum-package --args-file kurtosis-config.yaml --enclave dimhouse
+```
+
+### View xatu sidecar logs
+
+```bash
+# List services to find the dimhouse CL service name
+kurtosis enclave inspect dimhouse
+
+# View logs (service name is typically cl-1-lighthouse-nethermind)
+kurtosis service logs dimhouse cl-1-lighthouse-nethermind
+
+# Follow logs in real-time
+kurtosis service logs dimhouse cl-1-lighthouse-nethermind --follow
+```
+
+Xatu events appear as `stdout sink event` log lines containing JSON with event types like `LIBP2P_TRACE_GOSSIPSUB_BEACON_BLOCK` and `LIBP2P_TRACE_GOSSIPSUB_AGGREGATE_AND_PROOF`.
+
+To filter just the xatu events from Docker logs directly:
+```bash
+docker ps --filter "name=cl-1-lighthouse" --format '{{.ID}}' | xargs -I{} docker logs {} 2>&1 | grep "stdout sink event"
+```
+
+### View the chain
+
+Dora explorer is included -- find its URL with:
+```bash
+kurtosis enclave inspect dimhouse
+# Look for the dora service port mapping
+```
+
+### Cleanup
+
+```bash
+kurtosis enclave rm -f dimhouse
 ```
 
 ## CI
