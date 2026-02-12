@@ -60,7 +60,7 @@ index 5352814..838f843 100644
  beacon_chain = { workspace = true }
  bls = { workspace = true }
 diff --git a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
-index 9526921..b558fd6 100644
+index a5dc7d7..7d5ed7c 100644
 --- a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 +++ b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 @@ -39,6 +39,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
@@ -150,7 +150,7 @@ index 33b83aa..7bfd1d6 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 8b52096..c95a7b4 100644
+index 3d709ed..f5f0e97 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -98,6 +98,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -191,18 +191,18 @@ index eea8782..2ac0e0b 100644
  };
 +pub use pubsub::{get_compressed_size};
 diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
-index 231e717..6a2f635 100644
+index 1256790..71dbe6a 100644
 --- a/beacon_node/lighthouse_network/src/types/pubsub.rs
 +++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
-@@ -18,6 +18,7 @@ use types::{
-     SignedContributionAndProof, SignedVoluntaryExit, SingleAttestation, SubnetId,
-     SyncCommitteeMessage, SyncSubnetId,
- };
+@@ -5,6 +5,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
+ use libp2p::gossipsub;
+ use snap::raw::{Decoder, Encoder, decompress_len};
+ use ssz::{Decode, Encode};
 +use std::collections::HashMap;
- 
- #[derive(Debug, Clone, PartialEq)]
- pub enum PubsubMessage<E: EthSpec> {
-@@ -49,6 +50,27 @@ pub enum PubsubMessage<E: EthSpec> {
+ use std::io::{Error, ErrorKind};
+ use std::sync::Arc;
+ use types::{
+@@ -58,6 +59,27 @@ pub enum PubsubMessage<E: EthSpec> {
      LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
  }
  
@@ -230,7 +230,7 @@ index 231e717..6a2f635 100644
  // Implements the `DataTransform` trait of gossipsub to employ snappy compression
  pub struct SnappyTransform {
      /// Sets the maximum size we allow gossipsub messages to decompress to.
-@@ -72,8 +94,19 @@ impl gossipsub::DataTransform for SnappyTransform {
+@@ -81,8 +103,19 @@ impl gossipsub::DataTransform for SnappyTransform {
          &self,
          raw_message: gossipsub::RawMessage,
      ) -> Result<gossipsub::Message, std::io::Error> {
@@ -277,7 +277,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 60fe094..bdfbc85 100644
+index 8373dec..a07614c 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -12,7 +12,9 @@ use crate::sync::SyncMessage;
@@ -494,7 +494,7 @@ index 60fe094..bdfbc85 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index 0869b44..538b497 100644
+index af56b80..b5175cf 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -42,6 +42,7 @@ use types::{
@@ -567,7 +567,7 @@ index 0869b44..538b497 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index e4c7c6f..cb18e9b 100644
+index 61dccc9..648286b 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -253,6 +253,24 @@ pub fn cli_app() -> Command {

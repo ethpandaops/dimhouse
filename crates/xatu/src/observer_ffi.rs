@@ -592,8 +592,24 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
     ) -> ObserverResult {
         let block_root = column_sidecar.block_root();
         let slot = column_sidecar.slot();
-        let column_index = column_sidecar.index;
-        let kzg_commitments_count = column_sidecar.kzg_commitments.len() as u32;
+        let column_index = *column_sidecar.index();
+        let kzg_commitments_count = column_sidecar
+            .kzg_commitments()
+            .map(|c| c.len() as u32)
+            .unwrap_or(0);
+
+        // Extract variant-specific fields (only available on Fulu)
+        let (parent_root, state_root, proposer_index) =
+            if let Ok(header) = column_sidecar.signed_block_header() {
+                (
+                    format!("0x{}", hex::encode(header.message.parent_root.0)),
+                    format!("0x{}", hex::encode(header.message.state_root.0)),
+                    header.message.proposer_index,
+                )
+            } else {
+                // Gloas variant: these fields are not available
+                (String::new(), String::new(), 0)
+            };
 
         debug!(
             "Xatu FFI: Received gossip data column sidecar - slot: {}, column_index: {}, root: 0x{}, message_id: {:?}",
@@ -626,15 +642,9 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             slot: slot_u64,
             epoch,
             block_root: format!("0x{}", hex::encode(block_root.0)),
-            parent_root: format!(
-                "0x{}",
-                hex::encode(column_sidecar.signed_block_header.message.parent_root.0)
-            ),
-            state_root: format!(
-                "0x{}",
-                hex::encode(column_sidecar.signed_block_header.message.state_root.0)
-            ),
-            proposer_index: column_sidecar.block_proposer_index(),
+            parent_root,
+            state_root,
+            proposer_index,
             column_index,
             kzg_commitments_count,
             timestamp_ms: timestamp_millis as i64,
