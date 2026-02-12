@@ -1,0 +1,36 @@
+extra_files:
+  xatu-config.yaml: |
+    enabled: true
+    name: "dimhouse-node"
+
+    outputs:
+    - name: log
+      type: stdout
+      config:
+        address: "stdout"
+
+participants:
+  - el_type: nethermind
+    cl_type: lighthouse
+    cl_image: ethpandaops/dimhouse:latest
+    cl_extra_params:
+      - --xatu-config=/etc/dimhouse/xatu-config.yaml
+    cl_extra_mounts:
+      "/etc/dimhouse": "xatu-config.yaml"
+    vc_type: lighthouse
+    vc_image: ethpandaops/dimhouse:latest
+    count: 1
+  - el_type: nethermind
+    cl_type: lighthouse
+    count: 1
+
+network_params:
+  electra_fork_epoch: 1
+  fulu_fork_epoch: 2
+  min_validator_withdrawability_delay: 1
+  shard_committee_period: 1
+  churn_limit_quotient: 16
+  genesis_delay: 60
+
+additional_services:
+  - dora
