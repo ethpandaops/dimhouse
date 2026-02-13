@@ -42,7 +42,7 @@ jobs:
       - name: Build and push amd64 image
         run: |
           cd lighthouse
-          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64 .
+          docker build --provenance=false --sbom=false -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64 .
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64
 
   build-arm64:
@@ -74,7 +74,7 @@ jobs:
       - name: Build and push arm64 image
         run: |
           cd lighthouse
-          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64 .
+          docker build --provenance=false --sbom=false -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64 .
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64
 
   create-manifest:
