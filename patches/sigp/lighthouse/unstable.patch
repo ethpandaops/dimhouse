@@ -48,7 +48,7 @@ index 3e6f78a..74a6eaf 100644
              Ok(()) => {
                  let mut state = self.state.write().await;
 diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
-index ad2486a..9f20384 100644
+index 157fe15..77797b7 100644
 --- a/beacon_node/execution_layer/src/lib.rs
 +++ b/beacon_node/execution_layer/src/lib.rs
 @@ -69,6 +69,12 @@ mod payload_status;
@@ -64,7 +64,7 @@ index ad2486a..9f20384 100644
  /// Indicates the default jwt authenticated execution endpoint.
  pub const DEFAULT_EXECUTION_ENDPOINT: &str = "http://localhost:8551/";
  
-@@ -1424,6 +1430,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+@@ -1425,6 +1431,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
          &self,
          new_payload_request: NewPayloadRequest<'_, E>,
      ) -> Result<PayloadStatus, Error> {
@@ -76,7 +76,7 @@ index ad2486a..9f20384 100644
          let _timer = metrics::start_timer_vec(
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::NEW_PAYLOAD],
-@@ -1532,6 +1543,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+@@ -1533,6 +1544,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
          current_slot: Slot,
          head_block_root: Hash256,
      ) -> Result<PayloadStatus, Error> {
