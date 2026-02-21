@@ -89,7 +89,7 @@ index 157fe15..77797b7 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 3d709ed..f5f0e97 100644
+index 94e0ad0..e5cf54b 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -98,6 +98,8 @@ pub enum NetworkEvent<E: EthSpec> {
