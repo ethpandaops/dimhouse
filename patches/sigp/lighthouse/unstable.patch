@@ -202,7 +202,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 8373dec..a07614c 100644
+index 77d64c9..4d55d52 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -12,7 +12,9 @@ use crate::sync::SyncMessage;
