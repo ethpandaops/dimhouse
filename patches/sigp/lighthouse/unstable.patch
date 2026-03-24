@@ -89,7 +89,7 @@ index 90968fa..c14892a 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 94e0ad0..e5cf54b 100644
+index 184a334..253552d 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -98,6 +98,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -101,7 +101,7 @@ index 94e0ad0..e5cf54b 100644
      },
      /// Inform the network to send a Status to this peer.
      StatusPeer(PeerId),
-@@ -1281,12 +1283,18 @@ impl<E: EthSpec> Network<E> {
+@@ -1280,12 +1282,18 @@ impl<E: EthSpec> Network<E> {
                          );
                      }
                      Ok(msg) => {
