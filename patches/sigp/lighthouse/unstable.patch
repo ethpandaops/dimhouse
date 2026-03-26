@@ -89,7 +89,7 @@ index 90968fa..c14892a 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 184a334..253552d 100644
+index 56fcbb3..742ffe6 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -98,6 +98,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -202,7 +202,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 77d64c9..4d55d52 100644
+index e6982e6..fd27ba7 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -12,7 +12,9 @@ use crate::sync::SyncMessage;
@@ -286,7 +286,7 @@ index 77d64c9..4d55d52 100644
              }
          }
      }
-@@ -325,9 +346,131 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -348,9 +369,131 @@ impl<T: BeaconChainTypes> Router<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
