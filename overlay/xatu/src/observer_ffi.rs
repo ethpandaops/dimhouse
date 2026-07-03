@@ -721,7 +721,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             epoch,
             builder_index: message.builder_index,
             beacon_block_root: format!("0x{}", hex::encode(message.beacon_block_root.0)),
-            block_hash: format!("0x{}", hex::encode(message.payload.block_hash.0.0)),
+            block_hash: format!("0x{}", hex::encode(message.payload.block_hash.0.as_slice())),
             state_root: format!("0x{}", hex::encode(message.payload.state_root.0)),
             timestamp_ms: timestamp_millis as i64,
             message_id: hex::encode(&message_id.0),
@@ -780,8 +780,8 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             slot: slot_u64,
             epoch,
             builder_index: message.builder_index,
-            block_hash: format!("0x{}", hex::encode(message.block_hash.0.0)),
-            parent_block_hash: format!("0x{}", hex::encode(message.parent_block_hash.0.0)),
+            block_hash: format!("0x{}", hex::encode(message.block_hash.0.as_slice())),
+            parent_block_hash: format!("0x{}", hex::encode(message.parent_block_hash.0.as_slice())),
             value: message.value,
             execution_payment: message.execution_payment,
             fee_recipient: format!("0x{}", hex::encode(message.fee_recipient.as_slice())),
@@ -1076,7 +1076,9 @@ impl<E: EthSpec> crate::Xatu<E> for XatuObserver {
         topic: String,
         message_size: usize,
     ) {
-        let _ = <Self as crate::observer_trait::XatuObserverTrait>::on_gossip_execution_payload_bid::<E>(
+        let _ = <Self as crate::observer_trait::XatuObserverTrait>::on_gossip_execution_payload_bid::<
+            E,
+        >(
             self,
             message_id,
             peer_id,
@@ -1120,7 +1122,9 @@ impl<E: EthSpec> crate::Xatu<E> for XatuObserver {
         topic: String,
         message_size: usize,
     ) {
-        let _ = <Self as crate::observer_trait::XatuObserverTrait>::on_gossip_proposer_preferences::<E>(
+        let _ = <Self as crate::observer_trait::XatuObserverTrait>::on_gossip_proposer_preferences::<
+            E,
+        >(
             self,
             message_id,
             peer_id,
