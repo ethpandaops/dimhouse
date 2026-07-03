@@ -11,8 +11,9 @@ use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 use types::{
-    BlobSidecar, DataColumnSidecar, DataColumnSubnetId, EthSpec, SignedAggregateAndProof,
-    SignedBeaconBlock, SingleAttestation, SubnetId,
+    BlobSidecar, DataColumnSidecar, DataColumnSubnetId, EthSpec, PayloadAttestationMessage,
+    SignedAggregateAndProof, SignedBeaconBlock, SignedExecutionPayloadBid,
+    SignedExecutionPayloadEnvelope, SignedProposerPreferences, SingleAttestation, SubnetId,
 };
 
 pub struct XatuObserver {
@@ -593,23 +594,6 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         let block_root = column_sidecar.block_root();
         let slot = column_sidecar.slot();
         let column_index = *column_sidecar.index();
-        let kzg_commitments_count = column_sidecar
-            .kzg_commitments()
-            .map(|c| c.len() as u32)
-            .unwrap_or(0);
-
-        // Extract variant-specific fields (only available on Fulu)
-        let (parent_root, state_root, proposer_index) =
-            if let Ok(header) = column_sidecar.signed_block_header() {
-                (
-                    format!("0x{}", hex::encode(header.message.parent_root.0)),
-                    format!("0x{}", hex::encode(header.message.state_root.0)),
-                    header.message.proposer_index,
-                )
-            } else {
-                // Gloas variant: these fields are not available
-                (String::new(), String::new(), 0)
-            };
 
         debug!(
             "Xatu FFI: Received gossip data column sidecar - slot: {}, column_index: {}, root: 0x{}, message_id: {:?}",
@@ -637,21 +621,44 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
 
         let epoch = slot_u64 / network_info.slots_per_epoch;
 
-        let event = EventData::DataColumnSidecar {
-            peer_id: peer_id.to_string(),
-            slot: slot_u64,
-            epoch,
-            block_root: format!("0x{}", hex::encode(block_root.0)),
-            parent_root,
-            state_root,
-            proposer_index,
-            column_index,
-            kzg_commitments_count,
-            timestamp_ms: timestamp_millis as i64,
-            message_id: hex::encode(&message_id.0),
-            client,
-            topic,
-            message_size: message_size as u32,
+        // Gloas sidecars drop the signed block header (and with it proposer index,
+        // parent/state roots and the KZG commitment list), so they map to a
+        // dedicated event shape.
+        let event = match &*column_sidecar {
+            DataColumnSidecar::Fulu(sidecar) => EventData::DataColumnSidecar {
+                peer_id: peer_id.to_string(),
+                slot: slot_u64,
+                epoch,
+                block_root: format!("0x{}", hex::encode(block_root.0)),
+                parent_root: format!(
+                    "0x{}",
+                    hex::encode(sidecar.signed_block_header.message.parent_root.0)
+                ),
+                state_root: format!(
+                    "0x{}",
+                    hex::encode(sidecar.signed_block_header.message.state_root.0)
+                ),
+                proposer_index: sidecar.signed_block_header.message.proposer_index,
+                column_index,
+                kzg_commitments_count: sidecar.kzg_commitments.len() as u32,
+                timestamp_ms: timestamp_millis as i64,
+                message_id: hex::encode(&message_id.0),
+                client,
+                topic,
+                message_size: message_size as u32,
+            },
+            DataColumnSidecar::Gloas(_) => EventData::DataColumnSidecarGloas {
+                peer_id: peer_id.to_string(),
+                slot: slot_u64,
+                epoch,
+                block_root: format!("0x{}", hex::encode(block_root.0)),
+                column_index,
+                timestamp_ms: timestamp_millis as i64,
+                message_id: hex::encode(&message_id.0),
+                client,
+                topic,
+                message_size: message_size as u32,
+            },
         };
 
         debug!(
@@ -666,6 +673,252 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
                 debug!(
                     "Queued data column sidecar event for slot {} column_index {}",
                     slot, column_index
+                );
+            }
+        }
+
+        ObserverResult::Ok
+    }
+
+    fn on_gossip_execution_payload_envelope<E: EthSpec>(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        _client: Option<String>,
+        envelope: Arc<SignedExecutionPayloadEnvelope<E>>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    ) -> ObserverResult {
+        let message = &envelope.message;
+        let slot = message.slot();
+
+        debug!(
+            "Xatu FFI: Received gossip execution payload envelope - slot: {}, builder: {}, message_id: {:?}",
+            slot, message.builder_index, message_id
+        );
+
+        if !self.initialized.load(Ordering::Relaxed) {
+            warn!("Xatu FFI: Not initialized yet, skipping execution payload envelope");
+            return ObserverResult::Ok;
+        }
+
+        let slot_u64 = slot.as_u64();
+
+        let network_info = match self.network_info.as_ref() {
+            Some(info) => info,
+            None => {
+                error!("Xatu FFI: Network info not available");
+                return ObserverResult::Error("Network info not available".to_string());
+            }
+        };
+
+        let epoch = slot_u64 / network_info.slots_per_epoch;
+
+        let event = EventData::ExecutionPayloadEnvelope {
+            peer_id: peer_id.to_string(),
+            slot: slot_u64,
+            epoch,
+            builder_index: message.builder_index,
+            beacon_block_root: format!("0x{}", hex::encode(message.beacon_block_root.0)),
+            block_hash: format!("0x{}", hex::encode(message.payload.block_hash.0.0)),
+            state_root: format!("0x{}", hex::encode(message.payload.state_root.0)),
+            timestamp_ms: timestamp_millis as i64,
+            message_id: hex::encode(&message_id.0),
+            topic,
+            message_size: message_size as u32,
+        };
+
+        if let Some(sender) = &self.event_sender {
+            if let Err(e) = sender.send(event) {
+                error!("Failed to queue execution payload envelope event: {:?}", e);
+            } else {
+                debug!("Queued execution payload envelope event for slot {}", slot);
+            }
+        }
+
+        ObserverResult::Ok
+    }
+
+    fn on_gossip_execution_payload_bid<E: EthSpec>(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        _client: Option<String>,
+        bid: Arc<SignedExecutionPayloadBid<E>>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    ) -> ObserverResult {
+        let message = &bid.message;
+        let slot = message.slot;
+
+        debug!(
+            "Xatu FFI: Received gossip execution payload bid - slot: {}, builder: {}, value: {}, message_id: {:?}",
+            slot, message.builder_index, message.value, message_id
+        );
+
+        if !self.initialized.load(Ordering::Relaxed) {
+            warn!("Xatu FFI: Not initialized yet, skipping execution payload bid");
+            return ObserverResult::Ok;
+        }
+
+        let slot_u64 = slot.as_u64();
+
+        let network_info = match self.network_info.as_ref() {
+            Some(info) => info,
+            None => {
+                error!("Xatu FFI: Network info not available");
+                return ObserverResult::Error("Network info not available".to_string());
+            }
+        };
+
+        let epoch = slot_u64 / network_info.slots_per_epoch;
+
+        let event = EventData::ExecutionPayloadBid {
+            peer_id: peer_id.to_string(),
+            slot: slot_u64,
+            epoch,
+            builder_index: message.builder_index,
+            block_hash: format!("0x{}", hex::encode(message.block_hash.0.0)),
+            parent_block_hash: format!("0x{}", hex::encode(message.parent_block_hash.0.0)),
+            value: message.value,
+            execution_payment: message.execution_payment,
+            fee_recipient: format!("0x{}", hex::encode(message.fee_recipient.as_slice())),
+            gas_limit: message.gas_limit,
+            blob_kzg_commitment_count: message.blob_kzg_commitments.len() as u32,
+            timestamp_ms: timestamp_millis as i64,
+            message_id: hex::encode(&message_id.0),
+            topic,
+            message_size: message_size as u32,
+        };
+
+        if let Some(sender) = &self.event_sender {
+            if let Err(e) = sender.send(event) {
+                error!("Failed to queue execution payload bid event: {:?}", e);
+            } else {
+                debug!("Queued execution payload bid event for slot {}", slot);
+            }
+        }
+
+        ObserverResult::Ok
+    }
+
+    fn on_gossip_payload_attestation_message<E: EthSpec>(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        _client: Option<String>,
+        message: Arc<PayloadAttestationMessage>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    ) -> ObserverResult {
+        let data = &message.data;
+        let slot = data.slot;
+
+        debug!(
+            "Xatu FFI: Received gossip payload attestation message - slot: {}, validator: {}, present: {}, message_id: {:?}",
+            slot, message.validator_index, data.payload_present, message_id
+        );
+
+        if !self.initialized.load(Ordering::Relaxed) {
+            warn!("Xatu FFI: Not initialized yet, skipping payload attestation message");
+            return ObserverResult::Ok;
+        }
+
+        let slot_u64 = slot.as_u64();
+
+        let network_info = match self.network_info.as_ref() {
+            Some(info) => info,
+            None => {
+                error!("Xatu FFI: Network info not available");
+                return ObserverResult::Error("Network info not available".to_string());
+            }
+        };
+
+        let epoch = slot_u64 / network_info.slots_per_epoch;
+
+        let event = EventData::PayloadAttestationMessage {
+            peer_id: peer_id.to_string(),
+            slot: slot_u64,
+            epoch,
+            validator_index: message.validator_index,
+            beacon_block_root: format!("0x{}", hex::encode(data.beacon_block_root.0)),
+            payload_present: data.payload_present,
+            blob_data_available: data.blob_data_available,
+            timestamp_ms: timestamp_millis as i64,
+            message_id: hex::encode(&message_id.0),
+            topic,
+            message_size: message_size as u32,
+        };
+
+        if let Some(sender) = &self.event_sender {
+            if let Err(e) = sender.send(event) {
+                error!("Failed to queue payload attestation message event: {:?}", e);
+            } else {
+                debug!("Queued payload attestation message event for slot {}", slot);
+            }
+        }
+
+        ObserverResult::Ok
+    }
+
+    fn on_gossip_proposer_preferences<E: EthSpec>(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        _client: Option<String>,
+        preferences: Arc<SignedProposerPreferences>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    ) -> ObserverResult {
+        let message = &preferences.message;
+        let slot = message.proposal_slot;
+
+        debug!(
+            "Xatu FFI: Received gossip proposer preferences - proposal_slot: {}, validator: {}, message_id: {:?}",
+            slot, message.validator_index, message_id
+        );
+
+        if !self.initialized.load(Ordering::Relaxed) {
+            warn!("Xatu FFI: Not initialized yet, skipping proposer preferences");
+            return ObserverResult::Ok;
+        }
+
+        let slot_u64 = slot.as_u64();
+
+        let network_info = match self.network_info.as_ref() {
+            Some(info) => info,
+            None => {
+                error!("Xatu FFI: Network info not available");
+                return ObserverResult::Error("Network info not available".to_string());
+            }
+        };
+
+        let epoch = slot_u64 / network_info.slots_per_epoch;
+
+        let event = EventData::ProposerPreferences {
+            peer_id: peer_id.to_string(),
+            slot: slot_u64,
+            epoch,
+            validator_index: message.validator_index,
+            fee_recipient: format!("0x{}", hex::encode(message.fee_recipient.as_slice())),
+            target_gas_limit: message.target_gas_limit,
+            timestamp_ms: timestamp_millis as i64,
+            message_id: hex::encode(&message_id.0),
+            topic,
+            message_size: message_size as u32,
+        };
+
+        if let Some(sender) = &self.event_sender {
+            if let Err(e) = sender.send(event) {
+                error!("Failed to queue proposer preferences event: {:?}", e);
+            } else {
+                debug!(
+                    "Queued proposer preferences event for proposal slot {}",
+                    slot
                 );
             }
         }
@@ -789,6 +1042,94 @@ impl<E: EthSpec> crate::Xatu<E> for XatuObserver {
                 topic,
                 message_size,
             );
+    }
+
+    fn on_gossip_execution_payload_envelope(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        envelope: Arc<SignedExecutionPayloadEnvelope<E>>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    ) {
+        let _ = <Self as crate::observer_trait::XatuObserverTrait>::on_gossip_execution_payload_envelope::<E>(
+            self,
+            message_id,
+            peer_id,
+            client,
+            envelope,
+            timestamp_millis,
+            topic,
+            message_size,
+        );
+    }
+
+    fn on_gossip_execution_payload_bid(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        bid: Arc<SignedExecutionPayloadBid<E>>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    ) {
+        let _ = <Self as crate::observer_trait::XatuObserverTrait>::on_gossip_execution_payload_bid::<E>(
+            self,
+            message_id,
+            peer_id,
+            client,
+            bid,
+            timestamp_millis,
+            topic,
+            message_size,
+        );
+    }
+
+    fn on_gossip_payload_attestation_message(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        message: Arc<PayloadAttestationMessage>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    ) {
+        let _ = <Self as crate::observer_trait::XatuObserverTrait>::on_gossip_payload_attestation_message::<E>(
+            self,
+            message_id,
+            peer_id,
+            client,
+            message,
+            timestamp_millis,
+            topic,
+            message_size,
+        );
+    }
+
+    fn on_gossip_proposer_preferences(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        preferences: Arc<SignedProposerPreferences>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    ) {
+        let _ = <Self as crate::observer_trait::XatuObserverTrait>::on_gossip_proposer_preferences::<E>(
+            self,
+            message_id,
+            peer_id,
+            client,
+            preferences,
+            timestamp_millis,
+            topic,
+            message_size,
+        );
     }
 }
 
