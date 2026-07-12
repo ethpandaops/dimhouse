@@ -479,6 +479,9 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
                 types::AttestationRef::Electra(att) => {
                     format!("0x{}", hex::encode(att.aggregation_bits.as_slice()))
                 }
+                types::AttestationRef::Gloas(att) => {
+                    format!("0x{}", hex::encode(att.aggregation_bits.as_slice()))
+                }
             },
             signature: format!("0x{}", hex::encode(aggregate.signature().serialize())),
         };
