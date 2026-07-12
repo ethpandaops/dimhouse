@@ -110,7 +110,7 @@ pub fn init_with_chain_spec_and_genesis<E: EthSpec>(
         network_name: network_name.clone(),
         network_id: spec.deposit_network_id,
         slots_per_epoch: E::slots_per_epoch(),
-        seconds_per_slot: spec.seconds_per_slot,
+        seconds_per_slot: spec.get_slot_duration().as_secs(),
     };
 
     info!(

@@ -1,0 +1,617 @@
+diff --git a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
+index 16d6e6dd6..d459e77d5 100644
+--- a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
++++ b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
+@@ -48,6 +48,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
+         &self,
+         versioned_hashes: Vec<Hash256>,
+     ) -> Result<Option<Vec<BlobAndProofV2<T::EthSpec>>>, FetchEngineBlobError> {
++        // In optimistic mode, return empty blobs since we have no EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            return Ok(Some(vec![]));
++        }
++
+         let execution_layer = self
+             .chain
+             .execution_layer
+@@ -64,6 +69,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
+         &self,
+         versioned_hashes: Vec<Hash256>,
+     ) -> Result<Option<Vec<BlobAndProofV3<T::EthSpec>>>, FetchEngineBlobError> {
++        // In optimistic mode, return empty blobs since we have no EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            return Ok(Some(vec![]));
++        }
++
+         let execution_layer = self
+             .chain
+             .execution_layer
+diff --git a/beacon_node/execution_layer/src/engines.rs b/beacon_node/execution_layer/src/engines.rs
+index aac170d48..b32854ee7 100644
+--- a/beacon_node/execution_layer/src/engines.rs
++++ b/beacon_node/execution_layer/src/engines.rs
+@@ -230,6 +230,16 @@ impl Engine {
+     /// Run the `EngineApi::upcheck` function if the node's last known state is not synced. This
+     /// might be used to recover the node if offline.
+     pub async fn upcheck(&self) {
++        // In optimistic mode, always report as synced without contacting EL
++        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
++            let mut state = self.state.write().await;
++            if **state != EngineStateInternal::Synced {
++                info!("Optimistic mode: marking execution engine as synced (no EL required)");
++            }
++            state.update(EngineStateInternal::Synced);
++            return;
++        }
++
+         let (state, cache_action) = match self.api.upcheck().await {
+             Ok(()) => {
+                 let mut state = self.state.write().await;
+diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
+index 4e5a7720d..86e9ce9dc 100644
+--- a/beacon_node/execution_layer/src/lib.rs
++++ b/beacon_node/execution_layer/src/lib.rs
+@@ -66,6 +66,12 @@ mod payload_status;
+ pub mod test_utils;
+ pub mod versioned_hashes;
+ 
++/// Check if optimistic mode is enabled via environment variable.
++/// In optimistic mode, all EL calls are bypassed and blocks are accepted as valid.
++fn is_optimistic_mode() -> bool {
++    std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok()
++}
++
+ /// Indicates the default jwt authenticated execution endpoint.
+ pub const DEFAULT_EXECUTION_ENDPOINT: &str = "http://localhost:8551/";
+ 
+@@ -1429,6 +1435,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+         &self,
+         new_payload_request: NewPayloadRequest<'_, E>,
+     ) -> Result<PayloadStatus, Error> {
++        // Bypass EL validation in optimistic mode
++        if is_optimistic_mode() {
++            return Ok(PayloadStatus::Valid);
++        }
++
+         let _timer = metrics::start_timer_vec(
+             &metrics::EXECUTION_LAYER_REQUEST_TIMES,
+             &[metrics::NEW_PAYLOAD],
+@@ -1542,6 +1553,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+         head_block_root: Hash256,
+         head_payload_status: fork_choice::PayloadStatus,
+     ) -> Result<PayloadStatus, Error> {
++        // Bypass EL forkchoice in optimistic mode
++        if is_optimistic_mode() {
++            return Ok(PayloadStatus::Syncing);
++        }
++
+         let _timer = metrics::start_timer_vec(
+             &metrics::EXECUTION_LAYER_REQUEST_TIMES,
+             &[metrics::FORKCHOICE_UPDATED],
+diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
+index 9037975a0..11cf9c03e 100644
+--- a/beacon_node/lighthouse_network/src/service/mod.rs
++++ b/beacon_node/lighthouse_network/src/service/mod.rs
+@@ -105,6 +105,8 @@ pub enum NetworkEvent<E: EthSpec> {
+         topic: TopicHash,
+         /// The message itself.
+         message: PubsubMessage<E>,
++        /// The size of the raw message data in bytes.
++        message_size: usize,
+     },
+     /// A partial data column sidecar received via gossipsub partial protocol.
+     PartialDataColumnSidecar {
+@@ -1407,12 +1409,18 @@ impl<E: EthSpec> Network<E> {
+                         );
+                     }
+                     Ok(msg) => {
++                        // Get the compressed size from our cache, or fall back to decompressed size
++                        let message_size =
++                            crate::types::get_compressed_size(gs_msg.sequence_number)
++                                .unwrap_or_else(|| gs_msg.data.len());
++
+                         // Notify the network
+                         return Some(NetworkEvent::PubsubMessage {
+                             id,
+                             source: propagation_source,
+                             topic: gs_msg.topic,
+                             message: msg,
++                            message_size,
+                         });
+                     }
+                 }
+diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
+index 8a20e9da9..258a79fa5 100644
+--- a/beacon_node/lighthouse_network/src/types/mod.rs
++++ b/beacon_node/lighthouse_network/src/types/mod.rs
+@@ -22,3 +22,4 @@ pub use topics::{
+     GossipEncoding, GossipKind, GossipTopic, TopicConfig, all_topics_at_fork,
+     core_topics_to_subscribe, is_fork_non_core_topic, subnet_from_topic_hash,
+ };
++pub use pubsub::{get_compressed_size};
+diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
+index 296637f1f..a4ccdab93 100644
+--- a/beacon_node/lighthouse_network/src/types/pubsub.rs
++++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
+@@ -4,6 +4,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
+ use libp2p::gossipsub::{DataTransform, Message, RawMessage, TopicHash};
+ use snap::raw::{Decoder, Encoder, decompress_len};
+ use ssz::{Decode, Encode};
++use std::collections::HashMap;
+ use std::io::{Error, ErrorKind};
+ use std::sync::Arc;
+ use types::{
+@@ -56,6 +57,27 @@ pub enum PubsubMessage<E: EthSpec> {
+     LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
+ }
+ 
++// Thread-local storage for mapping sequence numbers to compressed message sizes
++thread_local! {
++    static COMPRESSED_SIZE_CACHE: std::cell::RefCell<HashMap<Option<u64>, usize>> = std::cell::RefCell::new(HashMap::new());
++}
++
++/// Get the compressed size for a given sequence number (message ID)
++pub fn get_compressed_size(sequence_number: Option<u64>) -> Option<usize> {
++    COMPRESSED_SIZE_CACHE.with(|cache| cache.borrow().get(&sequence_number).copied())
++}
++
++/// Clear old entries from the cache to prevent unbounded growth
++fn cleanup_cache() {
++    COMPRESSED_SIZE_CACHE.with(|cache| {
++        let mut cache = cache.borrow_mut();
++        // Keep only the last 10000 messages
++        if cache.len() > 10000 {
++            cache.clear();
++        }
++    });
++}
++
+ /// A message published via the partial gossipsub protocol.
+ #[derive(Debug, Clone)]
+ pub enum PubsubPartialMessage<E: EthSpec> {
+@@ -94,8 +116,19 @@ impl SnappyTransform {
+ impl DataTransform for SnappyTransform {
+     // Provides the snappy decompression from RawGossipsubMessages
+     fn inbound_transform(&self, raw_message: RawMessage) -> Result<Message, std::io::Error> {
++        // Store the compressed size in our cache
++        let compressed_size = raw_message.data.len();
++        COMPRESSED_SIZE_CACHE.with(|cache| {
++            cache
++                .borrow_mut()
++                .insert(raw_message.sequence_number, compressed_size);
++        });
++
++        // Periodically clean up the cache
++        cleanup_cache();
++
+         // first check the size of the compressed payload
+-        if raw_message.data.len() > self.max_compressed_len {
++        if compressed_size > self.max_compressed_len {
+             return Err(Error::new(
+                 ErrorKind::InvalidData,
+                 "ssz_snappy encoded data > max_compressed_len",
+diff --git a/beacon_node/network/src/lib.rs b/beacon_node/network/src/lib.rs
+index dc45f53c7..48a76e674 100644
+--- a/beacon_node/network/src/lib.rs
++++ b/beacon_node/network/src/lib.rs
+@@ -1,4 +1,6 @@
+ /// This crate provides the network server for Lighthouse.
++extern crate xatu;
++
+ pub mod service;
+ 
+ mod metrics;
+diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
+index d83068e33..d2adb6300 100644
+--- a/beacon_node/network/src/router.rs
++++ b/beacon_node/network/src/router.rs
+@@ -13,6 +13,7 @@ use beacon_chain::{BeaconChain, BeaconChainTypes};
+ use beacon_processor::{BeaconProcessorSend, DuplicateCache};
+ use futures::prelude::*;
+ use lighthouse_network::rpc::*;
++use lighthouse_network::types::SyncState;
+ use lighthouse_network::{
+     GossipTopic, MessageId, NetworkGlobals, PeerId, PubsubMessage, Response,
+     service::api_types::{AppRequestId, SyncRequestId},
+@@ -28,6 +29,7 @@ use types::{
+     BlobSidecar, DataColumnSidecar, EthSpec, ForkContext, PartialDataColumn, SignedBeaconBlock,
+     SignedExecutionPayloadEnvelope,
+ };
++use xatu::ObserverResult;
+ 
+ /// Handles messages from the network and routes them to the appropriate service to be handled.
+ pub struct Router<T: BeaconChainTypes> {
+@@ -43,6 +45,8 @@ pub struct Router<T: BeaconChainTypes> {
+     network_beacon_processor: Arc<NetworkBeaconProcessor<T>>,
+     /// Provides de-bounce functionality for logging.
+     logger_debounce: TimeLatch,
++    /// Xatu chain for event processing
++    xatu_chain: Option<Arc<xatu::XatuChain<T::EthSpec>>>,
+ }
+ 
+ /// Types of messages the router can receive.
+@@ -69,9 +73,16 @@ pub enum RouterMessage<E: EthSpec> {
+         error: RPCError,
+     },
+     /// A gossip message has been received. The fields are: message id, the peer that sent us this
+-    /// message, the message itself and a bool which indicates if the message should be processed
+-    /// by the beacon chain after successful verification.
+-    PubsubMessage(MessageId, PeerId, PubsubMessage<E>, bool),
++    /// message, the topic hash, the message itself, the message size in bytes, and a bool which
++    /// indicates if the message should be processed by the beacon chain after successful verification.
++    PubsubMessage(
++        MessageId,
++        PeerId,
++        lighthouse_network::TopicHash,
++        PubsubMessage<E>,
++        usize,
++        bool,
++    ),
+     /// A partial data column sidecar has been received via gossipsub partial protocol.
+     PartialDataColumnSidecar(PeerId, Box<PartialDataColumn<E>>, GossipTopic),
+     /// The peer manager has requested we re-status a peer.
+@@ -91,6 +102,7 @@ impl<T: BeaconChainTypes> Router<T> {
+         invalid_block_storage: InvalidBlockStorage,
+         beacon_processor_send: BeaconProcessorSend<T::EthSpec>,
+         fork_context: Arc<ForkContext>,
++        xatu_chain: Option<Arc<xatu::XatuChain<T::EthSpec>>>,
+     ) -> Result<mpsc::UnboundedSender<RouterMessage<T::EthSpec>>, String> {
+         trace!("Service starting");
+ 
+@@ -129,6 +141,7 @@ impl<T: BeaconChainTypes> Router<T> {
+             network: HandlerNetworkContext::new(network_send),
+             network_beacon_processor,
+             logger_debounce: TimeLatch::default(),
++            xatu_chain,
+         };
+ 
+         // spawn handler task and move the message handler instance into the spawned thread
+@@ -182,8 +195,15 @@ impl<T: BeaconChainTypes> Router<T> {
+             } => {
+                 self.on_rpc_error(peer_id, app_request_id, error);
+             }
+-            RouterMessage::PubsubMessage(id, peer_id, gossip, should_process) => {
+-                self.handle_gossip(id, peer_id, gossip, should_process);
++            RouterMessage::PubsubMessage(
++                id,
++                peer_id,
++                topic,
++                gossip,
++                message_size,
++                should_process,
++            ) => {
++                self.handle_gossip(id, peer_id, topic, gossip, message_size, should_process);
+             }
+             RouterMessage::PartialDataColumnSidecar(peer_id, column, topic) => self
+                 .handle_beacon_processor_send_result(
+@@ -376,10 +396,182 @@ impl<T: BeaconChainTypes> Router<T> {
+         &mut self,
+         message_id: MessageId,
+         peer_id: PeerId,
++        topic: lighthouse_network::TopicHash,
+         gossip_message: PubsubMessage<T::EthSpec>,
++        message_size: usize,
+         should_process: bool,
+     ) {
+         let seen_timestamp = self.chain.slot_clock.now_duration().unwrap_or_default();
++
++        // Send to xatu if enabled and node is synced (or optimistic mode allows it)
++        if let Some(xatu_chain) = &self.xatu_chain {
++            // Check sync state
++            let sync_state = self.network_globals.sync_state.read().clone();
++
++            // Check if optimistic sync is enabled - if so, allow events during finalized sync
++            let is_optimistic = self
++                .network_beacon_processor
++                .chain
++                .config
++                .optimistic_finalized_sync;
++
++            // Allow events only when synced or backfilling (head is synced, just filling history)
++            // Also allow during finalized sync when optimistic mode is enabled
++            let sync_ok = match &sync_state {
++                SyncState::Synced => true,
++                SyncState::BackFillSyncing { .. } => true,
++                SyncState::CustodyBackFillSyncing { .. } => true,
++                SyncState::SyncingHead { .. } => true,
++                SyncState::SyncingFinalized { .. } => {
++                    if is_optimistic {
++                        trace!(
++                            "Allowing Xatu event during finalized sync - optimistic mode enabled"
++                        );
++                        true
++                    } else {
++                        trace!("Skipping Xatu event - still syncing finalized chain");
++                        false
++                    }
++                }
++                SyncState::SyncTransition => {
++                    if is_optimistic {
++                        trace!(
++                            "Allowing Xatu event during sync transition - optimistic mode enabled"
++                        );
++                        true
++                    } else {
++                        trace!("Skipping Xatu event - in sync transition");
++                        false
++                    }
++                }
++                SyncState::Stalled => {
++                    trace!("Skipping Xatu event - sync stalled, no useful peers");
++                    false
++                }
++            };
++
++            if !sync_ok {
++                // Already logged specific reason above
++                return;
++            }
++
++            // Node is synced or backfilling, send events
++            trace!("Sending events to Xatu - sync state: {:?}", sync_state);
++            match &gossip_message {
++                PubsubMessage::BeaconBlock(block) => {
++                    if let ObserverResult::Error(e) = xatu_chain.on_gossip_block(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        block.clone(),
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing block: {}", e);
++                    }
++                }
++                PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => {
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_aggregate_and_proof(
++                        message_id.clone(),
++                        peer_id,
++                        aggregate_and_proof.clone().into(),
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing aggregate: {}", e);
++                    }
++                }
++                PubsubMessage::Attestation(subnet_attestation) => {
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_attestation(
++                        message_id.clone(),
++                        peer_id,
++                        Arc::new(subnet_attestation.1.clone()),
++                        subnet_attestation.0,
++                        should_process,
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing attestation: {}", e);
++                    }
++                }
++                PubsubMessage::DataColumnSidecar(data) => {
++                    let (subnet_id, column_sidecar) = &**data;
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_data_column_sidecar(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        *subnet_id,
++                        column_sidecar.clone(),
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing data column: {}", e);
++                    }
++                }
++                PubsubMessage::ExecutionPayload(envelope) => {
++                    if let ObserverResult::Error(e) = xatu_chain
++                        .process_gossip_execution_payload_envelope(
++                            message_id.clone(),
++                            peer_id,
++                            Some(self.network_globals.client(&peer_id).to_string()),
++                            envelope.clone().into(),
++                            seen_timestamp,
++                            topic.to_string(),
++                            message_size,
++                        )
++                    {
++                        debug!("Xatu error processing execution payload envelope: {}", e);
++                    }
++                }
++                PubsubMessage::ExecutionPayloadBid(bid) => {
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_execution_payload_bid(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        bid.clone().into(),
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing execution payload bid: {}", e);
++                    }
++                }
++                PubsubMessage::PayloadAttestation(message) => {
++                    if let ObserverResult::Error(e) = xatu_chain
++                        .process_gossip_payload_attestation_message(
++                            message_id.clone(),
++                            peer_id,
++                            Some(self.network_globals.client(&peer_id).to_string()),
++                            message.clone().into(),
++                            seen_timestamp,
++                            topic.to_string(),
++                            message_size,
++                        )
++                    {
++                        debug!("Xatu error processing payload attestation: {}", e);
++                    }
++                }
++                PubsubMessage::ProposerPreferences(preferences) => {
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_proposer_preferences(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        preferences.clone(),
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing proposer preferences: {}", e);
++                    }
++                }
++                _ => {}
++            }
++        }
++
+         match gossip_message {
+             PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
+                 .handle_beacon_processor_send_result(
+diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
+index cef3d5859..2ea06f1af 100644
+--- a/beacon_node/network/src/service.rs
++++ b/beacon_node/network/src/service.rs
+@@ -42,6 +42,7 @@ use types::{
+     EthSpec, ForkContext, Slot, SubnetId, SyncCommitteeSubscription, SyncSubnetId,
+     ValidatorSubscription,
+ };
++use xatu;
+ 
+ mod tests;
+ 
+@@ -319,6 +320,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+ 
+         // launch derived network services
+ 
++        // Initialize Xatu middleware chain with chain spec and actual genesis time
++        let xatu_chain = xatu::init_with_chain_spec_and_genesis::<T::EthSpec>(
++            &beacon_chain.spec,
++            beacon_chain.genesis_time,
++        )
++        .unwrap_or_else(|e| {
++            panic!(
++                "FATAL: Failed to initialize Xatu - network info is required: {}",
++                e
++            );
++        });
++
+         // router task
+         let router_send = Router::spawn(
+             beacon_chain.clone(),
+@@ -328,6 +341,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+             invalid_block_storage,
+             beacon_processor_send,
+             fork_context.clone(),
++            xatu_chain,
+         )?;
+ 
+         // attestation and sync committee subnet service
+@@ -539,8 +553,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+             NetworkEvent::PubsubMessage {
+                 id,
+                 source,
++                topic,
+                 message,
+-                ..
++                message_size,
+             } => {
+                 match message {
+                     // attestation information gets processed in the attestation service
+@@ -556,14 +571,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+                         self.send_to_router(RouterMessage::PubsubMessage(
+                             id,
+                             source,
++                            topic,
+                             message,
++                            message_size,
+                             should_process,
+                         ));
+                     }
+                     _ => {
+                         // all else is sent to the router
+                         self.send_to_router(RouterMessage::PubsubMessage(
+-                            id, source, message, true,
++                            id,
++                            source,
++                            topic,
++                            message,
++                            message_size,
++                            true,
+                         ));
+                     }
+                 }
+diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
+index 3cf6a6efd..331f2a5fc 100644
+--- a/beacon_node/src/cli.rs
++++ b/beacon_node/src/cli.rs
+@@ -253,6 +253,24 @@ pub fn cli_app() -> Command {
+                 .action(ArgAction::Set)
+                 .display_order(0)
+         )
++        .arg(
++            Arg::new("xatu-config")
++                .long("xatu-config")
++                .value_name("FILE")
++                .help("Path to a YAML configuration file for Xatu middleware. Xatu allows intercepting and modifying network messages for testing and debugging purposes.")
++                .action(ArgAction::Set)
++                .display_order(0)
++        )
++        .arg(
++            Arg::new("optimistic")
++                .long("optimistic")
++                .action(ArgAction::SetTrue)
++                .help_heading(FLAG_HEADER)
++                .help("Enables optimistic mode by bypassing execution engine validation. \
++                       Lighthouse will accept all blocks as valid without an execution client. \
++                       WARNING: This disables critical safety checks - use only for testing/observation.")
++                .display_order(0)
++        )
+         .arg(
+             Arg::new("disable-upnp")
+                 .long("disable-upnp")
+diff --git a/lighthouse/build.rs b/lighthouse/build.rs
+index 3d8a25ec8..cd1e97039 100644
+--- a/lighthouse/build.rs
++++ b/lighthouse/build.rs
+@@ -1,2 +1,13 @@
+ // This is a stub for determining the build profile, see `build_profile_name`.
+-fn main() {}
++fn main() {
++    // Set rpath so the binary can find libxatu in the same directory
++    #[cfg(target_os = "macos")]
++    {
++        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
++    }
++    #[cfg(not(target_os = "macos"))]
++    {
++        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
++        println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
++    }
++}
+diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
+index 53946ed27..b94ce799c 100644
+--- a/lighthouse/src/main.rs
++++ b/lighthouse/src/main.rs
+@@ -421,6 +421,22 @@ fn main() {
+ 
+     let matches = cli.get_matches();
+ 
++    // Set XATU_CONFIG environment variable early if xatu-config is provided
++    // Set LIGHTHOUSE_OPTIMISTIC environment variable if --optimistic flag is set
++    if let Some(("beacon_node", bn_matches)) = matches.subcommand() {
++        if let Some(xatu_config_path) = bn_matches.get_one::<String>("xatu-config") {
++            unsafe {
++                std::env::set_var("XATU_CONFIG", xatu_config_path);
++            }
++        }
++        if bn_matches.get_flag("optimistic") {
++            unsafe {
++                std::env::set_var("LIGHTHOUSE_OPTIMISTIC", "1");
++            }
++            eprintln!("WARNING: Optimistic mode enabled - execution engine validation is bypassed");
++        }
++    }
++
+     // Configure the allocator early in the process, before it has the chance to use the default values for
+     // anything important.
+     //

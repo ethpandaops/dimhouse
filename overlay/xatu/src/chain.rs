@@ -158,4 +158,104 @@ impl<E: EthSpec> XatuChain<E> {
         }
         ObserverResult::Ok
     }
+
+    /// Process a gossip ePBS execution payload envelope
+    pub fn process_gossip_execution_payload_envelope(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        envelope: Arc<types::SignedExecutionPayloadEnvelope<E>>,
+        timestamp: std::time::Duration,
+        topic: String,
+        message_size: usize,
+    ) -> ObserverResult {
+        if let Some(exporter) = &self.exporter {
+            exporter.on_gossip_execution_payload_envelope(
+                message_id,
+                peer_id,
+                client,
+                envelope,
+                timestamp.as_millis() as u64,
+                topic,
+                message_size,
+            );
+        }
+        ObserverResult::Ok
+    }
+
+    /// Process a gossip ePBS execution payload bid
+    pub fn process_gossip_execution_payload_bid(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        bid: Arc<types::SignedExecutionPayloadBid<E>>,
+        timestamp: std::time::Duration,
+        topic: String,
+        message_size: usize,
+    ) -> ObserverResult {
+        if let Some(exporter) = &self.exporter {
+            exporter.on_gossip_execution_payload_bid(
+                message_id,
+                peer_id,
+                client,
+                bid,
+                timestamp.as_millis() as u64,
+                topic,
+                message_size,
+            );
+        }
+        ObserverResult::Ok
+    }
+
+    /// Process a gossip ePBS payload attestation message (PTC vote)
+    pub fn process_gossip_payload_attestation_message(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        message: Arc<types::PayloadAttestationMessage>,
+        timestamp: std::time::Duration,
+        topic: String,
+        message_size: usize,
+    ) -> ObserverResult {
+        if let Some(exporter) = &self.exporter {
+            exporter.on_gossip_payload_attestation_message(
+                message_id,
+                peer_id,
+                client,
+                message,
+                timestamp.as_millis() as u64,
+                topic,
+                message_size,
+            );
+        }
+        ObserverResult::Ok
+    }
+
+    /// Process a gossip ePBS proposer preferences message
+    pub fn process_gossip_proposer_preferences(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        preferences: Arc<types::SignedProposerPreferences>,
+        timestamp: std::time::Duration,
+        topic: String,
+        message_size: usize,
+    ) -> ObserverResult {
+        if let Some(exporter) = &self.exporter {
+            exporter.on_gossip_proposer_preferences(
+                message_id,
+                peer_id,
+                client,
+                preferences,
+                timestamp.as_millis() as u64,
+                topic,
+                message_size,
+            );
+        }
+        ObserverResult::Ok
+    }
 }
