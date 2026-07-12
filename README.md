@@ -3,7 +3,7 @@
 Patch-based overlay for integrating [Xatu Sidecar](https://github.com/ethpandaops/xatu-sidecar) observability into [Lighthouse](https://github.com/sigp/lighthouse).
 
 > **This is the long-lived `release/gloas` branch.** It tracks the
-> `sigp/lighthouse` glamsterdam devnet branch (currently `glamsterdam-devnet-6`)
+> `sigp/lighthouse` glamsterdam devnet branch (currently `glamsterdam-devnet-7`)
 > instead of `unstable`, and adds Gloas/ePBS (EIP-7732) event emission:
 >
 > | event | gossip topic |
@@ -17,8 +17,8 @@ Patch-based overlay for integrating [Xatu Sidecar](https://github.com/ethpandaop
 > It depends on the `release/gloas` branch of xatu-sidecar (which in turn pins
 > xatu's `release/gloas` protos), so it cannot merge to master until that work
 > lands in xatu master. The docker workflow on this branch publishes
-> `ethpandaops/dimhouse:gloas-devnet-6` (rolling) and
-> `ethpandaops/dimhouse:gloas-devnet-6-<sha>` (pinned) images.
+> `ethpandaops/dimhouse:gloas-devnet-7` (rolling) and
+> `ethpandaops/dimhouse:gloas-devnet-7-<sha>` (pinned) images.
 > To move to a newer devnet: regenerate `patches/sigp/lighthouse/glamsterdam-devnet-N.patch`
 > with `save-patch.sh` and bump `LIGHTHOUSE_BRANCH` in `.github/workflows/docker.yml`.
 
