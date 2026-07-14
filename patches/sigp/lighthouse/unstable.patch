@@ -202,10 +202,10 @@ index dc45f53c7..48a76e674 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index d83068e33..8c02dafdd 100644
+index d83068e33..a4135a566 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
-@@ -12,7 +12,9 @@ use crate::sync::SyncMessage;
+@@ -12,14 +12,16 @@ use crate::sync::SyncMessage;
  use beacon_chain::{BeaconChain, BeaconChainTypes};
  use beacon_processor::{BeaconProcessorSend, DuplicateCache};
  use futures::prelude::*;
@@ -215,6 +215,14 @@ index d83068e33..8c02dafdd 100644
  use lighthouse_network::{
      GossipTopic, MessageId, NetworkGlobals, PeerId, PubsubMessage, Response,
      service::api_types::{AppRequestId, SyncRequestId},
+ };
+ use logging::TimeLatch;
+ use logging::crit;
+-use slot_clock::SlotClock;
++use slot_clock::{SlotClock, timestamp_now};
+ use std::sync::Arc;
+ use tokio::sync::mpsc;
+ use tokio_stream::wrappers::UnboundedReceiverStream;
 @@ -28,6 +30,7 @@ use types::{
      BlobSidecar, DataColumnSidecar, EthSpec, ForkContext, PartialDataColumn, SignedBeaconBlock,
      SignedExecutionPayloadEnvelope,
@@ -286,7 +294,7 @@ index d83068e33..8c02dafdd 100644
              }
              RouterMessage::PartialDataColumnSidecar(peer_id, column, topic) => self
                  .handle_beacon_processor_send_result(
-@@ -376,10 +397,133 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -376,10 +397,118 @@ impl<T: BeaconChainTypes> Router<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -379,21 +387,6 @@ index d83068e33..8c02dafdd 100644
 +                        message_size,
 +                    ) {
 +                        debug!("Xatu error processing attestation: {}", e);
-+                    }
-+                }
-+                PubsubMessage::BlobSidecar(data) => {
-+                    let (blob_index, blob_sidecar) = &**data;
-+                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_blob_sidecar(
-+                        message_id.clone(),
-+                        peer_id,
-+                        Some(self.network_globals.client(&peer_id).to_string()),
-+                        *blob_index,
-+                        blob_sidecar.clone(),
-+                        timestamp_now(),
-+                        topic.to_string(),
-+                        message_size,
-+                    ) {
-+                        debug!("Xatu error processing blob sidecar: {}", e);
 +                    }
 +                }
 +                PubsubMessage::DataColumnSidecar(data) => {
