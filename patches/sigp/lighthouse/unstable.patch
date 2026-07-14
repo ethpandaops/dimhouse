@@ -1,23 +1,23 @@
 diff --git a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
-index a5dc7d7..7d5ed7c 100644
+index 16d6e6dd6..7ca899a86 100644
 --- a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 +++ b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
-@@ -39,6 +39,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
+@@ -48,6 +48,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
          &self,
          versioned_hashes: Vec<Hash256>,
-     ) -> Result<Vec<Option<BlobAndProofV1<T::EthSpec>>>, FetchEngineBlobError> {
+     ) -> Result<Option<Vec<BlobAndProofV2<T::EthSpec>>>, FetchEngineBlobError> {
 +        // In optimistic mode, return no blobs since we have no EL
 +        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
-+            return Ok(vec![None; versioned_hashes.len()]);
++            return Ok(Some(vec![]));
 +        }
 +
          let execution_layer = self
              .chain
              .execution_layer
-@@ -55,6 +60,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
+@@ -64,6 +69,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
          &self,
          versioned_hashes: Vec<Hash256>,
-     ) -> Result<Option<Vec<BlobAndProofV2<T::EthSpec>>>, FetchEngineBlobError> {
+     ) -> Result<Option<Vec<BlobAndProofV3<T::EthSpec>>>, FetchEngineBlobError> {
 +        // In optimistic mode, return empty blobs since we have no EL
 +        if std::env::var("LIGHTHOUSE_OPTIMISTIC").is_ok() {
 +            return Ok(Some(vec![]));
@@ -27,10 +27,10 @@ index a5dc7d7..7d5ed7c 100644
              .chain
              .execution_layer
 diff --git a/beacon_node/execution_layer/src/engines.rs b/beacon_node/execution_layer/src/engines.rs
-index 3e6f78a..74a6eaf 100644
+index aac170d48..b32854ee7 100644
 --- a/beacon_node/execution_layer/src/engines.rs
 +++ b/beacon_node/execution_layer/src/engines.rs
-@@ -232,6 +232,16 @@ impl Engine {
+@@ -230,6 +230,16 @@ impl Engine {
      /// Run the `EngineApi::upcheck` function if the node's last known state is not synced. This
      /// might be used to recover the node if offline.
      pub async fn upcheck(&self) {
@@ -48,7 +48,7 @@ index 3e6f78a..74a6eaf 100644
              Ok(()) => {
                  let mut state = self.state.write().await;
 diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
-index 90968fa..c14892a 100644
+index 523f06b7f..2a9e89b25 100644
 --- a/beacon_node/execution_layer/src/lib.rs
 +++ b/beacon_node/execution_layer/src/lib.rs
 @@ -67,6 +67,12 @@ mod payload_status;
@@ -64,7 +64,7 @@ index 90968fa..c14892a 100644
  /// Indicates the default jwt authenticated execution endpoint.
  pub const DEFAULT_EXECUTION_ENDPOINT: &str = "http://localhost:8551/";
  
-@@ -1411,6 +1417,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+@@ -1423,6 +1429,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
          &self,
          new_payload_request: NewPayloadRequest<'_, E>,
      ) -> Result<PayloadStatus, Error> {
@@ -76,9 +76,9 @@ index 90968fa..c14892a 100644
          let _timer = metrics::start_timer_vec(
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::NEW_PAYLOAD],
-@@ -1519,6 +1530,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
-         current_slot: Slot,
+@@ -1536,6 +1547,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
          head_block_root: Hash256,
+         head_payload_status: fork_choice::PayloadStatus,
      ) -> Result<PayloadStatus, Error> {
 +        // Bypass EL forkchoice in optimistic mode
 +        if is_optimistic_mode() {
@@ -89,19 +89,19 @@ index 90968fa..c14892a 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 56fcbb3..742ffe6 100644
+index 9037975a0..11cf9c03e 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
-@@ -98,6 +98,8 @@ pub enum NetworkEvent<E: EthSpec> {
+@@ -105,6 +105,8 @@ pub enum NetworkEvent<E: EthSpec> {
          topic: TopicHash,
          /// The message itself.
          message: PubsubMessage<E>,
 +        /// The size of the raw message data in bytes.
 +        message_size: usize,
      },
-     /// Inform the network to send a Status to this peer.
-     StatusPeer(PeerId),
-@@ -1280,12 +1282,18 @@ impl<E: EthSpec> Network<E> {
+     /// A partial data column sidecar received via gossipsub partial protocol.
+     PartialDataColumnSidecar {
+@@ -1407,12 +1409,18 @@ impl<E: EthSpec> Network<E> {
                          );
                      }
                      Ok(msg) => {
@@ -121,28 +121,28 @@ index 56fcbb3..742ffe6 100644
                      }
                  }
 diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
-index eea8782..2ac0e0b 100644
+index 8a20e9da9..258a79fa5 100644
 --- a/beacon_node/lighthouse_network/src/types/mod.rs
 +++ b/beacon_node/lighthouse_network/src/types/mod.rs
-@@ -19,3 +19,4 @@ pub use topics::{
+@@ -22,3 +22,4 @@ pub use topics::{
      GossipEncoding, GossipKind, GossipTopic, TopicConfig, all_topics_at_fork,
      core_topics_to_subscribe, is_fork_non_core_topic, subnet_from_topic_hash,
  };
 +pub use pubsub::{get_compressed_size};
 diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
-index 1256790..71dbe6a 100644
+index 00b2c4262..ff7c92c5e 100644
 --- a/beacon_node/lighthouse_network/src/types/pubsub.rs
 +++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
-@@ -5,6 +5,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
- use libp2p::gossipsub;
+@@ -4,6 +4,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
+ use libp2p::gossipsub::{DataTransform, Message, RawMessage, TopicHash};
  use snap::raw::{Decoder, Encoder, decompress_len};
  use ssz::{Decode, Encode};
 +use std::collections::HashMap;
  use std::io::{Error, ErrorKind};
  use std::sync::Arc;
  use types::{
-@@ -58,6 +59,27 @@ pub enum PubsubMessage<E: EthSpec> {
-     LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
+@@ -74,6 +75,27 @@ pub enum PubsubPartialMessage<E: EthSpec> {
+     },
  }
  
 +// Thread-local storage for mapping sequence numbers to compressed message sizes
@@ -169,10 +169,10 @@ index 1256790..71dbe6a 100644
  // Implements the `DataTransform` trait of gossipsub to employ snappy compression
  pub struct SnappyTransform {
      /// Sets the maximum size we allow gossipsub messages to decompress to.
-@@ -81,8 +103,19 @@ impl gossipsub::DataTransform for SnappyTransform {
-         &self,
-         raw_message: gossipsub::RawMessage,
-     ) -> Result<gossipsub::Message, std::io::Error> {
+@@ -94,8 +116,19 @@ impl SnappyTransform {
+ impl DataTransform for SnappyTransform {
+     // Provides the snappy decompression from RawGossipsubMessages
+     fn inbound_transform(&self, raw_message: RawMessage) -> Result<Message, std::io::Error> {
 +        // Store the compressed size in our cache
 +        let compressed_size = raw_message.data.len();
 +        COMPRESSED_SIZE_CACHE.with(|cache| {
@@ -191,7 +191,7 @@ index 1256790..71dbe6a 100644
                  ErrorKind::InvalidData,
                  "ssz_snappy encoded data > max_compressed_len",
 diff --git a/beacon_node/network/src/lib.rs b/beacon_node/network/src/lib.rs
-index 2a7fedb..908f1fe 100644
+index dc45f53c7..48a76e674 100644
 --- a/beacon_node/network/src/lib.rs
 +++ b/beacon_node/network/src/lib.rs
 @@ -1,4 +1,6 @@
@@ -202,7 +202,7 @@ index 2a7fedb..908f1fe 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index e6982e6..fd27ba7 100644
+index d83068e33..8c02dafdd 100644
 --- a/beacon_node/network/src/router.rs
 +++ b/beacon_node/network/src/router.rs
 @@ -12,7 +12,9 @@ use crate::sync::SyncMessage;
@@ -213,17 +213,17 @@ index e6982e6..fd27ba7 100644
  use lighthouse_network::rpc::*;
 +use lighthouse_network::types::SyncState;
  use lighthouse_network::{
-     MessageId, NetworkGlobals, PeerId, PubsubMessage, Response,
+     GossipTopic, MessageId, NetworkGlobals, PeerId, PubsubMessage, Response,
      service::api_types::{AppRequestId, SyncRequestId},
-@@ -25,6 +27,7 @@ use tokio::sync::mpsc;
- use tokio_stream::wrappers::UnboundedReceiverStream;
- use tracing::{debug, error, trace, warn};
- use types::{BlobSidecar, DataColumnSidecar, EthSpec, ForkContext, SignedBeaconBlock};
+@@ -28,6 +30,7 @@ use types::{
+     BlobSidecar, DataColumnSidecar, EthSpec, ForkContext, PartialDataColumn, SignedBeaconBlock,
+     SignedExecutionPayloadEnvelope,
+ };
 +use xatu::ObserverResult;
  
  /// Handles messages from the network and routes them to the appropriate service to be handled.
  pub struct Router<T: BeaconChainTypes> {
-@@ -40,6 +43,8 @@ pub struct Router<T: BeaconChainTypes> {
+@@ -43,6 +46,8 @@ pub struct Router<T: BeaconChainTypes> {
      network_beacon_processor: Arc<NetworkBeaconProcessor<T>>,
      /// Provides de-bounce functionality for logging.
      logger_debounce: TimeLatch,
@@ -232,7 +232,7 @@ index e6982e6..fd27ba7 100644
  }
  
  /// Types of messages the router can receive.
-@@ -66,9 +71,16 @@ pub enum RouterMessage<E: EthSpec> {
+@@ -69,9 +74,16 @@ pub enum RouterMessage<E: EthSpec> {
          error: RPCError,
      },
      /// A gossip message has been received. The fields are: message id, the peer that sent us this
@@ -249,10 +249,10 @@ index e6982e6..fd27ba7 100644
 +        usize,
 +        bool,
 +    ),
+     /// A partial data column sidecar has been received via gossipsub partial protocol.
+     PartialDataColumnSidecar(PeerId, Box<PartialDataColumn<E>>, GossipTopic),
      /// The peer manager has requested we re-status a peer.
-     StatusPeer(PeerId),
-     /// The peer has an updated custody group count from METADATA.
-@@ -86,6 +98,7 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -91,6 +103,7 @@ impl<T: BeaconChainTypes> Router<T> {
          invalid_block_storage: InvalidBlockStorage,
          beacon_processor_send: BeaconProcessorSend<T::EthSpec>,
          fork_context: Arc<ForkContext>,
@@ -260,7 +260,7 @@ index e6982e6..fd27ba7 100644
      ) -> Result<mpsc::UnboundedSender<RouterMessage<T::EthSpec>>, String> {
          trace!("Service starting");
  
-@@ -124,6 +137,7 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -129,6 +142,7 @@ impl<T: BeaconChainTypes> Router<T> {
              network: HandlerNetworkContext::new(network_send),
              network_beacon_processor,
              logger_debounce: TimeLatch::default(),
@@ -268,7 +268,7 @@ index e6982e6..fd27ba7 100644
          };
  
          // spawn handler task and move the message handler instance into the spawned thread
-@@ -177,8 +191,15 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -182,8 +196,15 @@ impl<T: BeaconChainTypes> Router<T> {
              } => {
                  self.on_rpc_error(peer_id, app_request_id, error);
              }
@@ -284,9 +284,9 @@ index e6982e6..fd27ba7 100644
 +            ) => {
 +                self.handle_gossip(id, peer_id, topic, gossip, message_size, should_process);
              }
-         }
-     }
-@@ -348,9 +369,131 @@ impl<T: BeaconChainTypes> Router<T> {
+             RouterMessage::PartialDataColumnSidecar(peer_id, column, topic) => self
+                 .handle_beacon_processor_send_result(
+@@ -376,10 +397,133 @@ impl<T: BeaconChainTypes> Router<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -415,11 +415,13 @@ index e6982e6..fd27ba7 100644
 +            }
 +        }
 +
+         let seen_timestamp = self.chain.slot_clock.now_duration().unwrap_or_default();
++
          match gossip_message {
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index af56b80..b5175cf 100644
+index cef3d5859..2ea06f1af 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -42,6 +42,7 @@ use types::{
@@ -430,7 +432,7 @@ index af56b80..b5175cf 100644
  
  mod tests;
  
-@@ -311,6 +312,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -319,6 +320,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
  
          // launch derived network services
  
@@ -449,7 +451,7 @@ index af56b80..b5175cf 100644
          // router task
          let router_send = Router::spawn(
              beacon_chain.clone(),
-@@ -320,6 +333,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -328,6 +341,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              invalid_block_storage,
              beacon_processor_send,
              fork_context.clone(),
@@ -457,7 +459,7 @@ index af56b80..b5175cf 100644
          )?;
  
          // attestation and sync committee subnet service
-@@ -531,8 +545,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -539,8 +553,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              NetworkEvent::PubsubMessage {
                  id,
                  source,
@@ -468,7 +470,7 @@ index af56b80..b5175cf 100644
              } => {
                  match message {
                      // attestation information gets processed in the attestation service
-@@ -548,14 +563,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -556,14 +571,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                          self.send_to_router(RouterMessage::PubsubMessage(
                              id,
                              source,
@@ -492,7 +494,7 @@ index af56b80..b5175cf 100644
                      }
                  }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index 61dccc9..648286b 100644
+index 4fd43baf4..93ae1f45e 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -253,6 +253,24 @@ pub fn cli_app() -> Command {
@@ -521,7 +523,7 @@ index 61dccc9..648286b 100644
              Arg::new("disable-upnp")
                  .long("disable-upnp")
 diff --git a/lighthouse/build.rs b/lighthouse/build.rs
-index 3d8a25e..cd1e970 100644
+index 3d8a25ec8..cd1e97039 100644
 --- a/lighthouse/build.rs
 +++ b/lighthouse/build.rs
 @@ -1,2 +1,13 @@
@@ -540,7 +542,7 @@ index 3d8a25e..cd1e970 100644
 +    }
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 53946ed..b94ce79 100644
+index 53946ed27..b94ce799c 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
 @@ -421,6 +421,22 @@ fn main() {
