@@ -421,7 +421,7 @@ index d83068e33..8c02dafdd 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index cef3d5859..2ea06f1af 100644
+index cef3d5859..dac16446b 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -42,6 +42,7 @@ use types::{
@@ -432,7 +432,7 @@ index cef3d5859..2ea06f1af 100644
  
  mod tests;
  
-@@ -319,6 +320,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -319,6 +320,19 @@ impl<T: BeaconChainTypes> NetworkService<T> {
  
          // launch derived network services
  
@@ -440,6 +440,7 @@ index cef3d5859..2ea06f1af 100644
 +        let xatu_chain = xatu::init_with_chain_spec_and_genesis::<T::EthSpec>(
 +            &beacon_chain.spec,
 +            beacon_chain.genesis_time,
++            slot_clock::SlotClock::slot_duration(&beacon_chain.slot_clock).as_secs(),
 +        )
 +        .unwrap_or_else(|e| {
 +            panic!(
@@ -451,7 +452,7 @@ index cef3d5859..2ea06f1af 100644
          // router task
          let router_send = Router::spawn(
              beacon_chain.clone(),
-@@ -328,6 +341,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -328,6 +342,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              invalid_block_storage,
              beacon_processor_send,
              fork_context.clone(),
@@ -459,7 +460,7 @@ index cef3d5859..2ea06f1af 100644
          )?;
  
          // attestation and sync committee subnet service
-@@ -539,8 +553,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -539,8 +554,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              NetworkEvent::PubsubMessage {
                  id,
                  source,
@@ -470,7 +471,7 @@ index cef3d5859..2ea06f1af 100644
              } => {
                  match message {
                      // attestation information gets processed in the attestation service
-@@ -556,14 +571,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -556,14 +572,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                          self.send_to_router(RouterMessage::PubsubMessage(
                              id,
                              source,
