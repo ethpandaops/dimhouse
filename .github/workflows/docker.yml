@@ -1,20 +1,24 @@
 name: Build and Push Docker Images
 
-# release/gloas variant: builds against the sigp/lighthouse glamsterdam devnet
-# branch and publishes gloas-tagged images. Master keeps its own copy of this
+# gloas variant: builds a sigp/lighthouse branch that has a matching patch under
+# patches/ and publishes gloas-tagged images. Master keeps its own copy of this
 # workflow tracking unstable.
 
 on:
   push:
     branches:
       - release/gloas
+      - gloas-devnet-9
   workflow_dispatch:
 
 env:
   REGISTRY: docker.io
   IMAGE_NAME: ethpandaops/dimhouse
   LIGHTHOUSE_REPO: sigp/lighthouse
-  LIGHTHOUSE_BRANCH: glamsterdam-devnet-8
+  LIGHTHOUSE_BRANCH: unstable
+  # Published tag. Defaults to LIGHTHOUSE_BRANCH with glamsterdam swapped for
+  # gloas; set it when the devnet runs ahead of any matching upstream branch.
+  ROLLING_TAG: gloas-devnet-9
 
 jobs:
   build-amd64:
@@ -38,7 +42,8 @@ jobs:
       - name: Determine version tag
         id: version
         run: |
-          ROLLING=$(echo "${{ env.LIGHTHOUSE_BRANCH }}" | sed 's/glamsterdam/gloas/')
+          ROLLING="${{ env.ROLLING_TAG }}"
+          [ -n "$ROLLING" ] || ROLLING=$(echo "${{ env.LIGHTHOUSE_BRANCH }}" | sed 's/glamsterdam/gloas/')
           echo "tag=${ROLLING}-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
           echo "rolling=${ROLLING}" >> $GITHUB_OUTPUT
 
@@ -69,7 +74,8 @@ jobs:
       - name: Determine version tag
         id: version
         run: |
-          ROLLING=$(echo "${{ env.LIGHTHOUSE_BRANCH }}" | sed 's/glamsterdam/gloas/')
+          ROLLING="${{ env.ROLLING_TAG }}"
+          [ -n "$ROLLING" ] || ROLLING=$(echo "${{ env.LIGHTHOUSE_BRANCH }}" | sed 's/glamsterdam/gloas/')
           echo "tag=${ROLLING}-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
           echo "rolling=${ROLLING}" >> $GITHUB_OUTPUT
 
