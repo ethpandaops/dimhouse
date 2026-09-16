@@ -8,7 +8,7 @@ on:
   push:
     branches:
       - release/gloas
-      - gloas-devnet-9
+      - gloas-devnet-11
   workflow_dispatch:
 
 env:
@@ -18,7 +18,7 @@ env:
   LIGHTHOUSE_BRANCH: unstable
   # Published tag. Defaults to LIGHTHOUSE_BRANCH with glamsterdam swapped for
   # gloas; set it when the devnet runs ahead of any matching upstream branch.
-  ROLLING_TAG: gloas-devnet-9
+  ROLLING_TAG: gloas-devnet-11
 
 jobs:
   build-amd64:
