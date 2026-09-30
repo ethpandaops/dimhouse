@@ -118,9 +118,15 @@ if [ -d "lighthouse" ]; then
                     fi
                 fi
 
-                echo "Switching to branch $BRANCH..."
-                git fetch --depth 1 origin "$BRANCH":"$BRANCH"
-                git checkout "$BRANCH"
+                if git ls-remote --exit-code --tags origin "refs/tags/$BRANCH" >/dev/null 2>&1; then
+                    echo "Switching to tag $BRANCH..."
+                    git fetch --depth 1 origin tag "$BRANCH"
+                    git checkout "tags/$BRANCH"
+                else
+                    echo "Switching to branch $BRANCH..."
+                    git fetch --depth 1 origin "$BRANCH":"$BRANCH"
+                    git checkout "$BRANCH"
+                fi
             fi
 
             # Update to target (specific commit or latest)

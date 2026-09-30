@@ -7,10 +7,17 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      lighthouse_ref:
+        description: 'sigp/lighthouse branch or tag to build (needs patches/sigp/lighthouse/<ref>.patch). Refs other than unstable get <ref>-<sha7> tags and never touch latest.'
+        required: false
+        default: unstable
+        type: string
 
 env:
   REGISTRY: docker.io
   IMAGE_NAME: ethpandaops/dimhouse
+  LIGHTHOUSE_REF: ${{ inputs.lighthouse_ref || 'unstable' }}
 
 jobs:
   build-amd64:
@@ -22,7 +29,11 @@ jobs:
 
       - name: Prepare patched source
         run: |
-          ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "unstable" --skip-build --ci
+          if [[ ! "$LIGHTHOUSE_REF" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
+            echo "Invalid lighthouse_ref: $LIGHTHOUSE_REF" >&2
+            exit 1
+          fi
+          ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -35,8 +46,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          else
+          elif [ "$LIGHTHOUSE_REF" == "unstable" ]; then
             echo "tag=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${LIGHTHOUSE_REF}-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and push amd64 image
@@ -63,7 +76,11 @@ jobs:
 
       - name: Prepare patched source
         run: |
-          ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "unstable" --skip-build --ci
+          if [[ ! "$LIGHTHOUSE_REF" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
+            echo "Invalid lighthouse_ref: $LIGHTHOUSE_REF" >&2
+            exit 1
+          fi
+          ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -76,8 +93,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          else
+          elif [ "$LIGHTHOUSE_REF" == "unstable" ]; then
             echo "tag=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${LIGHTHOUSE_REF}-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and push arm64 image
@@ -118,8 +137,8 @@ jobs:
             ${AMD64_IMAGE} ${ARM64_IMAGE}
           docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
 
-          # Create latest tag for releases and master pushes
-          if [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; then
+          # latest only tracks unstable builds from releases and master pushes
+          if [ "$LIGHTHOUSE_REF" == "unstable" ] && { [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; }; then
             echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
               ${AMD64_IMAGE} ${ARM64_IMAGE}
@@ -138,7 +157,7 @@ jobs:
             ${AMD64_IMAGE} ${ARM64_IMAGE}
           docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill
 
-          if [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; then
+          if [ "$LIGHTHOUSE_REF" == "unstable" ] && { [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; }; then
             echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill"
             docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill \
               ${AMD64_IMAGE} ${ARM64_IMAGE}
@@ -151,10 +170,12 @@ jobs:
         run: |
           echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Lighthouse ref:** \`${LIGHTHOUSE_REF}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Images:**" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}\`" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill\` (backfill + historic-state reconstruction enabled)" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; then
+          if [ "$LIGHTHOUSE_REF" == "unstable" ] && { [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; }; then
             echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
             echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill\`" >> $GITHUB_STEP_SUMMARY
           fi

@@ -27,7 +27,8 @@ dimhouse/
 ├── patches/
 │   └── sigp/lighthouse/
 │       ├── unstable.patch              # Base patch: gossip hooks, xatu init, CLI flag
-│       └── unstable-01-optimistic.patch # Extension: bypass EL validation for observation
+│       ├── unstable-01-optimistic.patch # Extension: bypass EL validation for observation
+│       └── v8.2.2.patch                # Same patch rebased onto the v8.2.2 release tag
 ├── ci/
 │   ├── Dockerfile.ethpandaops    # Custom Dockerfile (replaces upstream)
 │   └── disable-upstream-workflows.sh
@@ -256,8 +257,18 @@ kurtosis enclave rm -f dimhouse
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `check-patches.yml` | Daily (cron) | Clones upstream, applies patches, builds. Auto-commits if patches needed updating |
-| `docker.yml` | Push to master / release | Builds + pushes multi-arch Docker image to `ethpandaops/dimhouse:<tag>` |
+| `docker.yml` | Push to master / release / manual | Builds + pushes multi-arch Docker image to `ethpandaops/dimhouse:<tag>` |
 | `validate-patches.yml` | PR | Validates patch file structure (hunk counts, etc.) |
+
+### Building a pinned Lighthouse release
+
+`docker.yml` builds lighthouse `unstable` by default. To build against a release tag that has a matching `patches/sigp/lighthouse/<ref>.patch`, dispatch it manually:
+
+```bash
+gh workflow run docker.yml -R ethpandaops/dimhouse --ref master -f lighthouse_ref=v8.2.2
+```
+
+Non-`unstable` builds are tagged `<ref>-<sha7>` and `<ref>-<sha7>-backfill` and never update `latest`/`latest-backfill`.
 
 ## Requirements
 
