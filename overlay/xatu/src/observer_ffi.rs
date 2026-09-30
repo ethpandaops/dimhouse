@@ -472,17 +472,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
                 .committee_index()
                 .unwrap_or(attestation_data.index),
             // Aggregation and signature fields
-            aggregation_bits: match aggregate.message().aggregate() {
-                types::AttestationRef::Base(att) => {
-                    format!("0x{}", hex::encode(att.aggregation_bits.as_slice()))
-                }
-                types::AttestationRef::Electra(att) => {
-                    format!("0x{}", hex::encode(att.aggregation_bits.as_slice()))
-                }
-                types::AttestationRef::Gloas(att) => {
-                    format!("0x{}", hex::encode(att.aggregation_bits.as_slice()))
-                }
-            },
+            aggregation_bits: aggregation_bits_hex(aggregate.message().aggregate()),
             signature: format!("0x{}", hex::encode(aggregate.signature().serialize())),
         };
 
@@ -1147,4 +1137,16 @@ impl Drop for XatuObserver {
             XatuFFI::close();
         }
     }
+}
+
+/// Hex-encodes raw aggregation bits for every attestation variant the linked `types` crate defines.
+fn aggregation_bits_hex<'a, E: EthSpec>(attestation: types::AttestationRef<'a, E>) -> String {
+    // The superstruct map macro names each variant struct unqualified, so they must be in scope.
+    use types::*;
+
+    types::map_attestation_ref!(&'a _, attestation, |att, cons| {
+        // Calling the variant constructor lets the compiler infer the macro's generic parameters.
+        let _ = cons(att);
+        format!("0x{}", ::hex::encode(att.aggregation_bits.as_slice()))
+    })
 }
