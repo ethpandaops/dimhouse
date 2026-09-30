@@ -89,6 +89,54 @@ pub trait Xatu<E: EthSpec>: Send + Sync {
         topic: String,
         message_size: usize,
     );
+
+    /// Called when an ePBS execution payload envelope is received via gossip
+    fn on_gossip_execution_payload_envelope(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        envelope: Arc<types::SignedExecutionPayloadEnvelope<E>>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    );
+
+    /// Called when an ePBS execution payload bid is received via gossip
+    fn on_gossip_execution_payload_bid(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        bid: Arc<types::SignedExecutionPayloadBid<E>>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    );
+
+    /// Called when an ePBS payload attestation message (PTC vote) is received via gossip
+    fn on_gossip_payload_attestation_message(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        message: Arc<types::PayloadAttestationMessage>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    );
+
+    /// Called when an ePBS proposer preferences message is received via gossip
+    fn on_gossip_proposer_preferences(
+        &self,
+        message_id: MessageId,
+        peer_id: PeerId,
+        client: Option<String>,
+        preferences: Arc<types::SignedProposerPreferences>,
+        timestamp_millis: u64,
+        topic: String,
+        message_size: usize,
+    );
 }
 
 /// Result type for observer processing

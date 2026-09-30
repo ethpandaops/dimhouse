@@ -69,4 +69,56 @@ pub(crate) trait XatuObserverTrait: Send + Sync {
     ) -> ObserverResult {
         ObserverResult::Ok
     }
+
+    fn on_gossip_execution_payload_envelope<E: types::EthSpec>(
+        &self,
+        _message_id: MessageId,
+        _peer_id: libp2p::PeerId,
+        _client: Option<String>,
+        _envelope: std::sync::Arc<types::SignedExecutionPayloadEnvelope<E>>,
+        _timestamp_millis: u64,
+        _topic: String,
+        _message_size: usize,
+    ) -> ObserverResult {
+        ObserverResult::Ok
+    }
+
+    fn on_gossip_execution_payload_bid<E: types::EthSpec>(
+        &self,
+        _message_id: MessageId,
+        _peer_id: libp2p::PeerId,
+        _client: Option<String>,
+        _bid: std::sync::Arc<types::SignedExecutionPayloadBid<E>>,
+        _timestamp_millis: u64,
+        _topic: String,
+        _message_size: usize,
+    ) -> ObserverResult {
+        ObserverResult::Ok
+    }
+
+    fn on_gossip_payload_attestation_message<E: types::EthSpec>(
+        &self,
+        _message_id: MessageId,
+        _peer_id: libp2p::PeerId,
+        _client: Option<String>,
+        _message: std::sync::Arc<types::PayloadAttestationMessage>,
+        _timestamp_millis: u64,
+        _topic: String,
+        _message_size: usize,
+    ) -> ObserverResult {
+        ObserverResult::Ok
+    }
+
+    fn on_gossip_proposer_preferences<E: types::EthSpec>(
+        &self,
+        _message_id: MessageId,
+        _peer_id: libp2p::PeerId,
+        _client: Option<String>,
+        _preferences: std::sync::Arc<types::SignedProposerPreferences>,
+        _timestamp_millis: u64,
+        _topic: String,
+        _message_size: usize,
+    ) -> ObserverResult {
+        ObserverResult::Ok
+    }
 }

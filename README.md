@@ -2,6 +2,18 @@
 
 Patch-based overlay for integrating [Xatu Sidecar](https://github.com/ethpandaops/xatu-sidecar) observability into [Lighthouse](https://github.com/sigp/lighthouse).
 
+## Gloas (ePBS)
+
+On top of the pre-Gloas gossip events, the router forwards the EIP-7732 gossip topics to xatu (requires xatu-sidecar v0.0.7 or later):
+
+| gossip topic | xatu event |
+|---|---|
+| `execution_payload` | `LIBP2P_TRACE_GOSSIPSUB_EXECUTION_PAYLOAD_ENVELOPE` |
+| `execution_payload_bid` | `LIBP2P_TRACE_GOSSIPSUB_EXECUTION_PAYLOAD_BID` |
+| `payload_attestation_message` | `LIBP2P_TRACE_GOSSIPSUB_PAYLOAD_ATTESTATION_MESSAGE` |
+| `proposer_preferences` | `LIBP2P_TRACE_GOSSIPSUB_PROPOSER_PREFERENCES` |
+| `data_column_sidecar_*` (Gloas shape) | `LIBP2P_TRACE_GOSSIPSUB_DATA_COLUMN_SIDECAR` |
+
 ## Overview
 
 Dimhouse uses a **patch + overlay** approach instead of maintaining a full fork. The repo stores only custom code and small patches; upstream Lighthouse is cloned fresh each build.

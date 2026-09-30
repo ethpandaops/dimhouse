@@ -50,16 +50,14 @@ pub fn init<E: EthSpec>() -> Option<Arc<XatuChain<E>>> {
 /// Initialize xatu with chain spec
 pub fn init_with_chain_spec<E: EthSpec>(
     spec: &ChainSpec,
-    seconds_per_slot: u64,
 ) -> Result<Option<Arc<XatuChain<E>>>, String> {
-    init_with_chain_spec_and_genesis::<E>(spec, spec.min_genesis_time, seconds_per_slot)
+    init_with_chain_spec_and_genesis::<E>(spec, spec.min_genesis_time)
 }
 
 /// Initialize xatu with chain spec and explicit genesis time
 pub fn init_with_chain_spec_and_genesis<E: EthSpec>(
     spec: &ChainSpec,
     genesis_time: u64,
-    seconds_per_slot: u64,
 ) -> Result<Option<Arc<XatuChain<E>>>, String> {
     info!("XATU FEATURE IS ENABLED - Initializing observer with chain spec");
 
@@ -112,7 +110,7 @@ pub fn init_with_chain_spec_and_genesis<E: EthSpec>(
         network_name: network_name.clone(),
         network_id: spec.deposit_network_id,
         slots_per_epoch: E::slots_per_epoch(),
-        seconds_per_slot,
+        seconds_per_slot: spec.get_slot_duration().as_secs(),
     };
 
     info!(
