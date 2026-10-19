@@ -28,7 +28,9 @@ dimhouse/
 │   └── sigp/lighthouse/
 │       ├── unstable.patch              # Base patch: gossip hooks, xatu init, CLI flag
 │       ├── unstable-01-optimistic.patch # Extension: bypass EL validation for observation
-│       └── v8.2.2.patch                # Same patch rebased onto the v8.2.2 release tag
+│       ├── v8.2.2.patch                # Same patch rebased onto the v8.2.2 release tag
+│       ├── v8.3.0-rc.0.patch           # Same patch rebased onto the v8.3.0-rc.0 tag
+│       └── release-v8.3.0.patch        # Same patch on the release-v8.3.0 branch (router merged into NetworkService)
 ├── ci/
 │   ├── Dockerfile.ethpandaops    # Custom Dockerfile (replaces upstream)
 │   └── disable-upstream-workflows.sh
@@ -272,7 +274,7 @@ Non-`unstable` builds are tagged `<ref>-<sha7>` and `<ref>-<sha7>-backfill` and 
 
 ## Requirements
 
-- Rust/Cargo 1.88+ (for building Lighthouse with edition2024 support)
+- Rust/Cargo 1.91+ (lighthouse MSRV from release-v8.3.0 onwards)
 - Git
 - Bash
 - cmake (required for building native dependencies)

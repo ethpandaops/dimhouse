@@ -11,6 +11,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let lib_dir = Path::new(&manifest_dir).join("src");
 
+    // Newer lighthouse makes SignedExecutionPayloadBid a fork superstruct read via `message()`.
+    println!("cargo:rustc-check-cfg=cfg(xatu_bid_superstruct)");
+    let bid_src = Path::new(&manifest_dir)
+        .join("../consensus/types/src/execution/signed_execution_payload_bid.rs");
+    if fs::read_to_string(&bid_src).is_ok_and(|src| src.contains("ExecutionPayloadBidRef")) {
+        println!("cargo:rustc-cfg=xatu_bid_superstruct");
+    }
+
     // Use platform-appropriate library extension
     let lib_ext = if cfg!(target_os = "macos") {
         "dylib"
