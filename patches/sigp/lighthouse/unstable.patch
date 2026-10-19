@@ -48,10 +48,10 @@ index c3f923b0b..744bca2bf 100644
              Ok(()) => {
                  let mut state = self.state.write().await;
 diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
-index 8a1d86784..e6e7f90a3 100644
+index 4fbb792ac..435ae7528 100644
 --- a/beacon_node/execution_layer/src/lib.rs
 +++ b/beacon_node/execution_layer/src/lib.rs
-@@ -69,6 +69,12 @@ mod payload_status;
+@@ -67,6 +67,12 @@ mod payload_status;
  pub mod test_utils;
  pub mod versioned_hashes;
  
@@ -64,7 +64,7 @@ index 8a1d86784..e6e7f90a3 100644
  /// Indicates the default jwt authenticated execution endpoint.
  pub const DEFAULT_EXECUTION_ENDPOINT: &str = "http://localhost:8551/";
  
-@@ -1442,6 +1448,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+@@ -1446,6 +1452,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
          &self,
          new_payload_request: NewPayloadRequest<'_, E>,
      ) -> Result<PayloadStatus, Error> {
@@ -76,7 +76,7 @@ index 8a1d86784..e6e7f90a3 100644
          let _timer = metrics::start_timer_vec(
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::NEW_PAYLOAD],
-@@ -1557,6 +1568,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+@@ -1561,6 +1572,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
          head_payload_status: fork_choice::PayloadStatus,
          custody_columns: &[ColumnIndex],
      ) -> Result<PayloadStatus, Error> {
@@ -89,7 +89,7 @@ index 8a1d86784..e6e7f90a3 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 389f07d7e..1c806016b 100644
+index f7d4eb9c9..0bc160c2c 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -107,6 +107,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -101,7 +101,7 @@ index 389f07d7e..1c806016b 100644
      },
      /// A partial data column sidecar received via gossipsub partial protocol.
      PartialDataColumnSidecar {
-@@ -1412,12 +1414,18 @@ impl<E: EthSpec> Network<E> {
+@@ -1396,12 +1398,18 @@ impl<E: EthSpec> Network<E> {
                          );
                      }
                      Ok(msg) => {
@@ -121,7 +121,7 @@ index 389f07d7e..1c806016b 100644
                      }
                  }
 diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
-index 9a15ab81a..5012c1994 100644
+index 155d4fd1f..bb8ecab0d 100644
 --- a/beacon_node/lighthouse_network/src/types/mod.rs
 +++ b/beacon_node/lighthouse_network/src/types/mod.rs
 @@ -22,3 +22,4 @@ pub use topics::{
@@ -130,7 +130,7 @@ index 9a15ab81a..5012c1994 100644
  };
 +pub use pubsub::{get_compressed_size};
 diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
-index b3db66359..7d99c93e5 100644
+index ab4b2010d..93e6eed95 100644
 --- a/beacon_node/lighthouse_network/src/types/pubsub.rs
 +++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
 @@ -5,6 +5,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
@@ -141,7 +141,7 @@ index b3db66359..7d99c93e5 100644
  use std::io::{Error, ErrorKind};
  use std::sync::Arc;
  use types::{
-@@ -62,6 +63,27 @@ pub enum PubsubMessage<E: EthSpec> {
+@@ -61,6 +62,27 @@ pub enum PubsubMessage<E: EthSpec> {
      LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
  }
  
@@ -169,7 +169,7 @@ index b3db66359..7d99c93e5 100644
  /// A message published via the partial gossipsub protocol.
  #[derive(Debug, Clone, PartialEq)]
  pub enum PubsubPartialMessage<E: EthSpec> {
-@@ -105,8 +127,19 @@ impl SnappyTransform {
+@@ -104,8 +126,19 @@ impl SnappyTransform {
  impl DataTransform for SnappyTransform {
      // Provides the snappy decompression from RawGossipsubMessages
      fn inbound_transform(&self, raw_message: RawMessage) -> Result<Message, std::io::Error> {
@@ -191,7 +191,7 @@ index b3db66359..7d99c93e5 100644
                  ErrorKind::InvalidData,
                  "ssz_snappy encoded data > max_compressed_len",
 diff --git a/beacon_node/network/src/lib.rs b/beacon_node/network/src/lib.rs
-index c9a071ed2..6b983e814 100644
+index 502ef4fdb..33399c4b0 100644
 --- a/beacon_node/network/src/lib.rs
 +++ b/beacon_node/network/src/lib.rs
 @@ -1,4 +1,6 @@
@@ -201,90 +201,88 @@ index c9a071ed2..6b983e814 100644
  pub mod service;
  
  mod metrics;
-diff --git a/beacon_node/network/src/router.rs b/beacon_node/network/src/router.rs
-index 665a039d2..95c2b1254 100644
---- a/beacon_node/network/src/router.rs
-+++ b/beacon_node/network/src/router.rs
-@@ -13,6 +13,7 @@ use beacon_chain::{BeaconChain, BeaconChainTypes};
- use beacon_processor::{BeaconProcessorSend, DuplicateCache};
- use futures::prelude::*;
- use lighthouse_network::rpc::*;
+diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
+index 05d657975..82a5839d5 100644
+--- a/beacon_node/network/src/service.rs
++++ b/beacon_node/network/src/service.rs
+@@ -23,6 +23,7 @@ use lighthouse_network::rpc::methods;
+ use lighthouse_network::rpc::methods::RpcResponse;
+ use lighthouse_network::service::Network;
+ use lighthouse_network::types::{GossipKind, PubsubPartialMessage};
 +use lighthouse_network::types::SyncState;
  use lighthouse_network::{
-     GossipTopic, MessageId, NetworkGlobals, PeerId, PubsubMessage, Response,
-     service::api_types::{AppRequestId, SyncRequestId},
-@@ -28,6 +29,7 @@ use types::{
-     BlobSidecar, DataColumnSidecar, EthSpec, ForkContext, PartialDataColumn, SignedBeaconBlock,
-     SignedExecutionPayloadEnvelope,
+     Context, PeerAction, PubsubMessage, ReportSource, Response, Subnet,
+     rpc::{GoodbyeReason, RpcErrorResponse},
+@@ -49,6 +50,7 @@ use types::{
+     SignedExecutionPayloadEnvelope, SubnetId, SyncCommitteeSubscription, SyncSubnetId,
+     ValidatorSubscription,
  };
 +use xatu::ObserverResult;
  
- /// Handles messages from the network and routes them to the appropriate service to be handled.
- pub struct Router<T: BeaconChainTypes> {
-@@ -43,6 +45,8 @@ pub struct Router<T: BeaconChainTypes> {
-     network_beacon_processor: Arc<NetworkBeaconProcessor<T>>,
-     /// Provides de-bounce functionality for logging.
-     logger_debounce: TimeLatch,
+ mod tests;
+ 
+@@ -227,6 +229,8 @@ pub struct NetworkService<T: BeaconChainTypes> {
+     gossipsub_parameter_update: tokio::time::Interval,
+     /// Provides fork specific info.
+     fork_context: Arc<ForkContext>,
 +    /// Xatu chain for event processing
 +    xatu_chain: Option<Arc<xatu::XatuChain<T::EthSpec>>>,
  }
  
- /// Types of messages the router can receive.
-@@ -69,9 +73,16 @@ pub enum RouterMessage<E: EthSpec> {
-         error: RPCError,
-     },
-     /// A gossip message has been received. The fields are: message id, the peer that sent us this
--    /// message, the message itself and a bool which indicates if the message should be processed
--    /// by the beacon chain after successful verification.
--    PubsubMessage(MessageId, PeerId, PubsubMessage<E>, bool),
-+    /// message, the topic hash, the message itself, the message size in bytes, and a bool which
-+    /// indicates if the message should be processed by the beacon chain after successful verification.
-+    PubsubMessage(
-+        MessageId,
-+        PeerId,
-+        lighthouse_network::TopicHash,
-+        PubsubMessage<E>,
-+        usize,
-+        bool,
-+    ),
-     /// A partial data column sidecar has been received via gossipsub partial protocol.
-     PartialDataColumnSidecar(PeerId, Box<PartialDataColumn<E>>, GossipTopic),
-     /// The peer manager has requested we re-status a peer.
-@@ -91,6 +102,7 @@ impl<T: BeaconChainTypes> Router<T> {
-         invalid_block_storage: InvalidBlockStorage,
-         beacon_processor_send: BeaconProcessorSend<T::EthSpec>,
-         fork_context: Arc<ForkContext>,
-+        xatu_chain: Option<Arc<xatu::XatuChain<T::EthSpec>>>,
-     ) -> Result<mpsc::UnboundedSender<RouterMessage<T::EthSpec>>, String> {
-         trace!("Service starting");
+ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -335,6 +339,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
  
-@@ -129,6 +141,7 @@ impl<T: BeaconChainTypes> Router<T> {
-             network: HandlerNetworkContext::new(network_send),
-             network_beacon_processor,
-             logger_debounce: TimeLatch::default(),
+         // launch derived network services
+ 
++        // Initialize Xatu middleware chain with chain spec and actual genesis time
++        let xatu_chain = xatu::init_with_chain_spec_and_genesis::<T::EthSpec>(
++            &beacon_chain.spec,
++            beacon_chain.genesis_time,
++        )
++        .unwrap_or_else(|e| {
++            panic!(
++                "FATAL: Failed to initialize Xatu - network info is required: {}",
++                e
++            );
++        });
++
+         // generate the sync message channel
+         let (sync_send, sync_recv) = mpsc::unbounded_channel::<SyncMessage<T::EthSpec>>();
+         let network_send = network_senders.network_send();
+@@ -398,6 +414,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+             metrics_update,
+             gossipsub_parameter_update,
+             fork_context,
 +            xatu_chain,
          };
  
-         // spawn handler task and move the message handler instance into the spawned thread
-@@ -182,8 +195,15 @@ impl<T: BeaconChainTypes> Router<T> {
-             } => {
-                 self.on_rpc_error(peer_id, app_request_id, error);
-             }
--            RouterMessage::PubsubMessage(id, peer_id, gossip, should_process) => {
--                self.handle_gossip(id, peer_id, gossip, should_process);
-+            RouterMessage::PubsubMessage(
-+                id,
-+                peer_id,
+         Ok((network_service, network_globals, network_senders))
+@@ -550,8 +567,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+             NetworkEvent::PubsubMessage {
+                 id,
+                 source,
 +                topic,
-+                gossip,
+                 message,
+-                ..
 +                message_size,
-+                should_process,
-+            ) => {
-+                self.handle_gossip(id, peer_id, topic, gossip, message_size, should_process);
+             } => {
+                 match message {
+                     // attestation information gets processed in the attestation service
+@@ -564,11 +582,11 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+                             Subnet::Attestation(subnet_id),
+                             &attestation.data,
+                         );
+-                        self.handle_gossip(id, source, message, should_process);
++                        self.handle_gossip(id, source, topic, message, message_size, should_process);
+                     }
+                     _ => {
+                         // all else is handled by the router
+-                        self.handle_gossip(id, source, message, true);
++                        self.handle_gossip(id, source, topic, message, message_size, true);
+                     }
+                 }
              }
-             RouterMessage::PartialDataColumnSidecar(peer_id, column, topic) => self
-                 .handle_beacon_processor_send_result(
-@@ -376,10 +396,179 @@ impl<T: BeaconChainTypes> Router<T> {
+@@ -1402,7 +1420,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -293,7 +291,11 @@ index 665a039d2..95c2b1254 100644
 +        message_size: usize,
          should_process: bool,
      ) {
-         let seen_timestamp = self.chain.slot_clock.now_duration().unwrap_or_default();
+         let seen_timestamp = self
+@@ -1410,6 +1430,173 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+             .slot_clock
+             .now_duration()
+             .unwrap_or_default();
 +
 +        // Send to xatu if enabled and node is synced (or optimistic mode allows it)
 +        if let Some(xatu_chain) = &self.xatu_chain {
@@ -464,81 +466,8 @@ index 665a039d2..95c2b1254 100644
          match gossip_message {
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
-diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index f134296ef..fdec786b1 100644
---- a/beacon_node/network/src/service.rs
-+++ b/beacon_node/network/src/service.rs
-@@ -42,6 +42,7 @@ use types::{
-     EthSpec, ForkContext, Slot, SubnetId, SyncCommitteeSubscription, SyncSubnetId,
-     ValidatorSubscription,
- };
-+use xatu;
- 
- mod tests;
- 
-@@ -319,6 +320,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
- 
-         // launch derived network services
- 
-+        // Initialize Xatu middleware chain with chain spec and actual genesis time
-+        let xatu_chain = xatu::init_with_chain_spec_and_genesis::<T::EthSpec>(
-+            &beacon_chain.spec,
-+            beacon_chain.genesis_time,
-+        )
-+        .unwrap_or_else(|e| {
-+            panic!(
-+                "FATAL: Failed to initialize Xatu - network info is required: {}",
-+                e
-+            );
-+        });
-+
-         // router task
-         let router_send = Router::spawn(
-             beacon_chain.clone(),
-@@ -328,6 +341,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
-             invalid_block_storage,
-             beacon_processor_send,
-             fork_context.clone(),
-+            xatu_chain,
-         )?;
- 
-         // attestation and sync committee subnet service
-@@ -539,8 +553,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
-             NetworkEvent::PubsubMessage {
-                 id,
-                 source,
-+                topic,
-                 message,
--                ..
-+                message_size,
-             } => {
-                 match message {
-                     // attestation information gets processed in the attestation service
-@@ -556,14 +571,21 @@ impl<T: BeaconChainTypes> NetworkService<T> {
-                         self.send_to_router(RouterMessage::PubsubMessage(
-                             id,
-                             source,
-+                            topic,
-                             message,
-+                            message_size,
-                             should_process,
-                         ));
-                     }
-                     _ => {
-                         // all else is sent to the router
-                         self.send_to_router(RouterMessage::PubsubMessage(
--                            id, source, message, true,
-+                            id,
-+                            source,
-+                            topic,
-+                            message,
-+                            message_size,
-+                            true,
-                         ));
-                     }
-                 }
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index 39da4fea0..5ca578c83 100644
+index cfd687e81..73cfaf655 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -253,6 +253,24 @@ pub fn cli_app() -> Command {
