@@ -227,6 +227,7 @@ pub struct PartialDataColumnPart {
 pub struct DataColumnCompletion {
     pub timestamp_ms: i64,
     pub peer_id: String,
+    pub topic: String,
     pub block_root: String,
     pub slot: u64,
     pub column_index: u64,

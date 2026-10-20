@@ -4,11 +4,13 @@ use crate::observer_ffi::XatuObserver;
 use lighthouse_network::types::SyncState;
 use std::sync::{Arc, OnceLock};
 use tracing::warn;
+use types::ForkContext;
 
 type EventGate = Box<dyn Fn() -> bool + Send + Sync>;
 
 static OBSERVER: OnceLock<Arc<XatuObserver>> = OnceLock::new();
 static EVENT_GATE: OnceLock<EventGate> = OnceLock::new();
+static FORK_CONTEXT: OnceLock<Arc<ForkContext>> = OnceLock::new();
 
 pub(crate) fn register_observer(observer: Arc<XatuObserver>) {
     if OBSERVER.set(observer).is_err() {
@@ -31,6 +33,19 @@ where
     if EVENT_GATE.set(Box::new(gate)).is_err() {
         warn!("Xatu event gate already registered, keeping the first one");
     }
+}
+
+/// Registers the fork context used to name gossip topics for events raised outside the network
+/// service. Only the first one is kept.
+pub fn set_fork_context(fork_context: Arc<ForkContext>) {
+    if FORK_CONTEXT.set(fork_context).is_err() {
+        warn!("Xatu fork context already registered, keeping the first one");
+    }
+}
+
+#[cfg_attr(not(xatu_partial_columns), allow(dead_code))]
+pub(crate) fn fork_context() -> Option<&'static ForkContext> {
+    FORK_CONTEXT.get().map(Arc::as_ref)
 }
 
 /// Whether events may be exported right now. Open until a gate is registered.

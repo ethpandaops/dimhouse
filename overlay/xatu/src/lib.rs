@@ -22,7 +22,7 @@ use std::sync::Arc;
 use types::{EthSpec, SignedBeaconBlock};
 
 pub use config::{NetworkInfo, XatuConfig};
-pub use emitter::{events_enabled, set_event_gate, sync_state_allows_events};
+pub use emitter::{events_enabled, set_event_gate, set_fork_context, sync_state_allows_events};
 pub use init::{init, init_with_chain_spec, init_with_chain_spec_and_genesis};
 #[cfg(xatu_partial_columns)]
 pub use partial::{

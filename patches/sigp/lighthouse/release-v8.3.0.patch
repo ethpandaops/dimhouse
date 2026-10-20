@@ -399,7 +399,7 @@ index cbcc50b..41858f5 100644
                  match &availability_processing_status {
                      AvailabilityProcessingStatus::Imported(_, hash) => {
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index 05d6579..34b1c89 100644
+index 05d6579..2c33ebf 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -49,6 +49,7 @@ use types::{
@@ -419,7 +419,7 @@ index 05d6579..34b1c89 100644
  }
  
  impl<T: BeaconChainTypes> NetworkService<T> {
-@@ -335,6 +338,26 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -335,6 +338,27 @@ impl<T: BeaconChainTypes> NetworkService<T> {
  
          // launch derived network services
  
@@ -442,11 +442,12 @@ index 05d6579..34b1c89 100644
 +                optimistic_finalized_sync,
 +            )
 +        });
++        xatu::set_fork_context(fork_context.clone());
 +
          // generate the sync message channel
          let (sync_send, sync_recv) = mpsc::unbounded_channel::<SyncMessage<T::EthSpec>>();
          let network_send = network_senders.network_send();
-@@ -398,6 +421,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -398,6 +422,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              metrics_update,
              gossipsub_parameter_update,
              fork_context,
@@ -454,7 +455,7 @@ index 05d6579..34b1c89 100644
          };
  
          Ok((network_service, network_globals, network_senders))
-@@ -550,8 +574,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -550,8 +575,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              NetworkEvent::PubsubMessage {
                  id,
                  source,
@@ -465,7 +466,7 @@ index 05d6579..34b1c89 100644
              } => {
                  match message {
                      // attestation information gets processed in the attestation service
-@@ -564,11 +589,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -564,11 +590,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                              Subnet::Attestation(subnet_id),
                              &attestation.data,
                          );
@@ -486,7 +487,7 @@ index 05d6579..34b1c89 100644
                      }
                  }
              }
-@@ -576,9 +608,39 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -576,9 +609,39 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                  source,
                  column,
                  topic,
@@ -526,15 +527,15 @@ index 05d6579..34b1c89 100644
              NetworkEvent::NewListenAddr(multiaddr) => {
                  self.network_globals
                      .listen_multiaddrs
-@@ -678,6 +740,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -678,6 +741,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                  self.libp2p.publish(messages);
              }
              NetworkMessage::PublishPartialColumns { messages } => {
-+                xatu::on_partial_data_columns_published(&messages, &self.fork_context);
++                xatu::on_partial_data_columns_published(&messages);
                  self.libp2p.publish_partial(messages);
              }
              NetworkMessage::ReportPeer {
-@@ -1402,7 +1465,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -1402,7 +1466,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -544,7 +545,7 @@ index 05d6579..34b1c89 100644
          should_process: bool,
      ) {
          let seen_timestamp = self
-@@ -1410,6 +1475,130 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -1410,6 +1476,130 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              .slot_clock
              .now_duration()
              .unwrap_or_default();

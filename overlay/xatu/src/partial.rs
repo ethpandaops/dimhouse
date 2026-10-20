@@ -13,7 +13,7 @@ use std::fmt::Debug;
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 use types::{
-    CellBitmap, ColumnIndex, DataColumnSidecar, DataColumnSubnetId, EthSpec, ForkContext, Hash256,
+    CellBitmap, ColumnIndex, DataColumnSidecar, DataColumnSubnetId, EthSpec, Hash256,
     PartialDataColumn, PartialDataColumnGroupId, PartialDataColumnPartsMetadata,
     PartialDataColumnRef, Slot,
 };
@@ -159,15 +159,11 @@ pub fn on_partial_data_column_received<E: EthSpec>(
 
 /// Records the partial data columns the node hands to gossipsub for publishing. Gossipsub decides
 /// per peer what to send, so these parts carry no peer and no message size.
-pub fn on_partial_data_columns_published<E: EthSpec>(
-    messages: &[PubsubPartialMessage<E>],
-    fork_context: &ForkContext,
-) {
+pub fn on_partial_data_columns_published<E: EthSpec>(messages: &[PubsubPartialMessage<E>]) {
     let Some(observer) = emitter::active_observer() else {
         return;
     };
 
-    let fork_digest = fork_context.current_fork_digest();
     for message in messages {
         let (column, requests, header) = match message {
             PubsubPartialMessage::DataColumnFulu {
@@ -189,12 +185,9 @@ pub fn on_partial_data_columns_published<E: EthSpec>(
             ),
         };
 
-        let subnet = DataColumnSubnetId::from_column_index(*column.index(), &fork_context.spec);
-        let topic = GossipTopic::new(
-            GossipKind::DataColumnSidecar(subnet),
-            GossipEncoding::default(),
-            fork_digest,
-        );
+        let Some(topic) = data_column_topic(*column.index()) else {
+            continue;
+        };
         let group_id = encode_group_id(column);
 
         let mut part = new_part(DIRECTION_SEND, String::new(), &topic, &group_id);
@@ -256,6 +249,9 @@ pub fn on_data_column_completed<E: EthSpec>(
     observer.send(EventData::DataColumnCompleted(DataColumnCompletion {
         timestamp_ms: now_ms(),
         peer_id: peer_id.map(ToString::to_string).unwrap_or_default(),
+        topic: data_column_topic(column_index)
+            .map(|topic| topic.to_string())
+            .unwrap_or_default(),
         block_root: hex_root(block_root),
         slot: column.slot().as_u64(),
         column_index,
@@ -375,6 +371,18 @@ impl ReceivedPartial {
             new_cells_count: saturating_u32(new_cells),
         }
     }
+}
+
+/// The gossip topic currently carrying `column_index`, once the network service has registered
+/// its fork context.
+fn data_column_topic(column_index: ColumnIndex) -> Option<GossipTopic> {
+    let fork_context = emitter::fork_context()?;
+    let subnet = DataColumnSubnetId::from_column_index(column_index, &fork_context.spec);
+    Some(GossipTopic::new(
+        GossipKind::DataColumnSidecar(subnet),
+        GossipEncoding::default(),
+        fork_context.current_fork_digest(),
+    ))
 }
 
 fn new_part(
