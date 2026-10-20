@@ -89,7 +89,7 @@ index 4fbb792..435ae75 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 4f06126..db66e30 100644
+index 4f06126..2dcf311 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -107,6 +107,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -131,7 +131,7 @@ index 4f06126..db66e30 100644
 +                        // Get the compressed size from our cache, or fall back to decompressed size
 +                        let message_size =
 +                            crate::types::get_compressed_size(&gs_msg.topic, &gs_msg.data)
-+                                .unwrap_or_else(|| gs_msg.data.len());
++                                .unwrap_or(gs_msg.data.len());
 +
                          // Notify the network
                          return Some(NetworkEvent::PubsubMessage {
