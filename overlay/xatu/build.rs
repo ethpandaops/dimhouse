@@ -5,7 +5,7 @@ use std::path::Path;
 
 // Version of xatu-sidecar to download from GitHub releases
 // Update this when new versions are released: https://github.com/ethpandaops/xatu-sidecar/releases
-const XATU_SIDECAR_VERSION: &str = "v0.0.7";
+const XATU_SIDECAR_VERSION: &str = "v0.0.8";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -17,6 +17,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .join("../consensus/types/src/execution/signed_execution_payload_bid.rs");
     if fs::read_to_string(&bid_src).is_ok_and(|src| src.contains("ExecutionPayloadBidRef")) {
         println!("cargo:rustc-cfg=xatu_bid_superstruct");
+    }
+
+    // Partial data column capture needs the fork-aware partial types (release-v8.3.0 onwards).
+    println!("cargo:rustc-check-cfg=cfg(xatu_partial_columns)");
+    let partial_src = Path::new(&manifest_dir)
+        .join("../consensus/types/src/data/partial_data_column_sidecar.rs");
+    if fs::read_to_string(&partial_src).is_ok_and(|src| src.contains("PartialDataColumnGroupId")) {
+        println!("cargo:rustc-cfg=xatu_partial_columns");
     }
 
     // Use platform-appropriate library extension

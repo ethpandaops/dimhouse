@@ -184,6 +184,76 @@ pub enum EventData {
         topic: String,
         message_size: u32,
     },
+    #[serde(rename = "PARTIAL_DATA_COLUMN")]
+    PartialDataColumn(PartialDataColumnPart),
+    #[serde(rename = "DATA_COLUMN_COMPLETED")]
+    DataColumnCompleted(DataColumnCompletion),
+    #[serde(rename = "PARTIAL_DATA_COLUMN_OUTCOME")]
+    PartialDataColumnOutcome(PartialDataColumnVerdict),
+}
+
+/// One gossipsub partial messages extension part on a data column topic. `slot` is 0 when unknown
+/// and bitmaps are 0x-prefixed hex SSZ bitlists.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct PartialDataColumnPart {
+    pub timestamp_ms: i64,
+    pub direction: String,
+    pub capture_point: String,
+    pub peer_id: String,
+    pub topic: String,
+    pub group_id: String,
+    pub group_version: u32,
+    pub block_root: String,
+    pub slot: u64,
+    pub column_index: u64,
+    pub has_message: bool,
+    pub message_size: u32,
+    pub cells_count: u32,
+    pub cells_bitmap: String,
+    pub bitmap_length: u32,
+    pub has_header: bool,
+    pub kzg_commitments_count: u32,
+    pub proposer_index: u64,
+    pub has_metadata: bool,
+    pub metadata_size: u32,
+    pub metadata_available_count: u32,
+    pub metadata_requests_count: u32,
+    pub metadata_available: String,
+    pub metadata_requests: String,
+}
+
+/// A custody data column becoming fully available. `peer_id` is empty when no peer completed it.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct DataColumnCompletion {
+    pub timestamp_ms: i64,
+    pub peer_id: String,
+    pub topic: String,
+    pub block_root: String,
+    pub slot: u64,
+    pub column_index: u64,
+    pub completed_via: String,
+    pub cells_total: u32,
+    pub cells_from_gossip: u32,
+    pub cells_from_el: u32,
+    pub contributing_peers: u32,
+    pub kzg_commitments_count: u32,
+}
+
+/// The validation verdict for one received partial data column message. `slot` is 0 when unknown.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct PartialDataColumnVerdict {
+    pub timestamp_ms: i64,
+    pub peer_id: String,
+    pub topic: String,
+    pub group_id: String,
+    pub block_root: String,
+    pub slot: u64,
+    pub column_index: u64,
+    pub stage: String,
+    pub outcome: String,
+    pub reason: String,
+    pub cells_count: u32,
+    pub new_cells_count: u32,
 }
 
 pub struct XatuFFI;

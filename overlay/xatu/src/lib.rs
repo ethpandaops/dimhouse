@@ -8,18 +8,27 @@ pub mod shim;
 
 // Internal modules
 mod chain;
+mod emitter;
 mod ffi;
 mod init;
 mod metrics;
 mod observer_ffi;
 mod observer_trait;
+#[cfg(xatu_partial_columns)]
+mod partial;
 
 use lighthouse_network::{MessageId, PeerId};
 use std::sync::Arc;
 use types::{EthSpec, SignedBeaconBlock};
 
 pub use config::{NetworkInfo, XatuConfig};
+pub use emitter::{events_enabled, set_event_gate, set_fork_context, sync_state_allows_events};
 pub use init::{init, init_with_chain_spec, init_with_chain_spec_and_genesis};
+#[cfg(xatu_partial_columns)]
+pub use partial::{
+    on_data_column_completed, on_partial_data_column_received, on_partial_data_columns_published,
+    CompletedVia, ReceivedPartial,
+};
 
 // Keep these for backwards compatibility with Lighthouse integration
 pub use chain::XatuChain;
