@@ -19,6 +19,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("cargo:rustc-cfg=xatu_bid_superstruct");
     }
 
+    // Partial data column capture needs the fork-aware partial types (release-v8.3.0 onwards).
+    println!("cargo:rustc-check-cfg=cfg(xatu_partial_columns)");
+    let partial_src = Path::new(&manifest_dir)
+        .join("../consensus/types/src/data/partial_data_column_sidecar.rs");
+    if fs::read_to_string(&partial_src).is_ok_and(|src| src.contains("PartialDataColumnGroupId")) {
+        println!("cargo:rustc-cfg=xatu_partial_columns");
+    }
+
     // Use platform-appropriate library extension
     let lib_ext = if cfg!(target_os = "macos") {
         "dylib"

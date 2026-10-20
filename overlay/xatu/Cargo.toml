@@ -16,6 +16,7 @@ chrono = "0.4"
 # Lighthouse dependencies
 lighthouse_network = { path = "../beacon_node/lighthouse_network" }
 types = { path = "../consensus/types" }
+ethereum_ssz = "0.10"
 tree_hash = "0.10"
 metrics = { path = "../common/metrics" }
 

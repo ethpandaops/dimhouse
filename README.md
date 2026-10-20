@@ -14,6 +14,18 @@ On top of the pre-Gloas gossip events, the router forwards the EIP-7732 gossip t
 | `proposer_preferences` | `LIBP2P_TRACE_GOSSIPSUB_PROPOSER_PREFERENCES` |
 | `data_column_sidecar_*` (Gloas shape) | `LIBP2P_TRACE_GOSSIPSUB_DATA_COLUMN_SIDECAR` |
 
+## Partial data columns
+
+Lighthouse v8.3.0 disseminates PeerDAS columns cell by cell with the gossipsub partial messages extension (`--enable-partial-columns`, on by default). A column assembled from cells never arrives as a gossip message, so the `release-v8.3.0` and `unstable` patches export these instead:
+
+| xatu event | Emitted when |
+|---|---|
+| `LIBP2P_TRACE_GOSSIPSUB_PARTIAL_DATA_COLUMN` | A partial part reaches Lighthouse (`RECV`, including metadata-only parts and parts that fail to decode) or Lighthouse hands its partials to gossipsub for publishing (`SEND`, no peer). Capture point is `APP`: gossipsub has already dropped redundant parts. |
+| `LIBP2P_TRACE_DATA_COLUMN_COMPLETED` | A custody column becomes complete via full gossip, partial gossip, the EL (`getBlobs`) or reconstruction. Reported once per block root and column. |
+| `LIBP2P_TRACE_GOSSIPSUB_PARTIAL_DATA_COLUMN_OUTCOME` | A received partial is decoded and verified (`ACCEPT`, `IGNORE` or `REJECT`, with the Lighthouse error variant as the reason). |
+
+`cells_from_el` on completions is derived as the cells not received through accepted partials. These events need xatu-sidecar v0.0.8 or later. The overlay only compiles them against Lighthouse versions with the fork-aware partial types (`xatu_partial_columns` cfg in `overlay/xatu/build.rs`).
+
 ## Overview
 
 Dimhouse uses a **patch + overlay** approach instead of maintaining a full fork. The repo stores only custom code and small patches; upstream Lighthouse is cloned fresh each build.

@@ -245,6 +245,20 @@ impl XatuObserver {
         self.network_info = Some(network_info);
         self
     }
+
+    /// Queues an event for the next batch, dropping it if the FFI is not ready or the queue is full.
+    #[cfg_attr(not(xatu_partial_columns), allow(dead_code))]
+    pub(crate) fn send(&self, event: EventData) {
+        if !self.initialized.load(Ordering::Relaxed) {
+            return;
+        }
+
+        if let Some(sender) = &self.event_sender {
+            if let Err(e) = sender.try_send(event) {
+                error!(error = %e, "Failed to queue xatu event");
+            }
+        }
+    }
 }
 
 impl crate::observer_trait::XatuObserverTrait for XatuObserver {
