@@ -1,5 +1,5 @@
 diff --git a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
-index db4d956e3..3c451e924 100644
+index db4d956..3c451e9 100644
 --- a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 +++ b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 @@ -55,6 +55,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
@@ -27,7 +27,7 @@ index db4d956e3..3c451e924 100644
              .chain
              .execution_layer
 diff --git a/beacon_node/execution_layer/src/engines.rs b/beacon_node/execution_layer/src/engines.rs
-index c3f923b0b..744bca2bf 100644
+index c3f923b..744bca2 100644
 --- a/beacon_node/execution_layer/src/engines.rs
 +++ b/beacon_node/execution_layer/src/engines.rs
 @@ -238,6 +238,16 @@ impl Engine {
@@ -48,7 +48,7 @@ index c3f923b0b..744bca2bf 100644
              Ok(()) => {
                  let mut state = self.state.write().await;
 diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
-index 4fbb792ac..435ae7528 100644
+index 4fbb792..435ae75 100644
 --- a/beacon_node/execution_layer/src/lib.rs
 +++ b/beacon_node/execution_layer/src/lib.rs
 @@ -67,6 +67,12 @@ mod payload_status;
@@ -89,7 +89,7 @@ index 4fbb792ac..435ae7528 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index f7d4eb9c9..0bc160c2c 100644
+index 4f06126..db66e30 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
 @@ -107,6 +107,8 @@ pub enum NetworkEvent<E: EthSpec> {
@@ -101,13 +101,36 @@ index f7d4eb9c9..0bc160c2c 100644
      },
      /// A partial data column sidecar received via gossipsub partial protocol.
      PartialDataColumnSidecar {
-@@ -1396,12 +1398,18 @@ impl<E: EthSpec> Network<E> {
+@@ -116,6 +118,22 @@ pub enum NetworkEvent<E: EthSpec> {
+         column: Box<PartialDataColumn<E>>,
+         /// The topic that this message was sent on.
+         topic: GossipTopic,
++        /// The partial message group ID.
++        group_id: Vec<u8>,
++        /// The size of the encoded partial message in bytes.
++        message_size: usize,
++        /// The parts metadata sent with the message.
++        metadata: Option<Vec<u8>>,
++    },
++    /// A partial data column part without a decodable message: metadata only, or a message that
++    /// failed to decode.
++    PartialDataColumnPart {
++        source: PeerId,
++        topic: GossipTopic,
++        group_id: Vec<u8>,
++        message_size: usize,
++        metadata: Option<Vec<u8>>,
++        decode_error: Option<String>,
+     },
+     /// Inform the network to send a Status to this peer.
+     StatusPeer(PeerId),
+@@ -1402,12 +1420,18 @@ impl<E: EthSpec> Network<E> {
                          );
                      }
                      Ok(msg) => {
 +                        // Get the compressed size from our cache, or fall back to decompressed size
 +                        let message_size =
-+                            crate::types::get_compressed_size(gs_msg.sequence_number)
++                            crate::types::get_compressed_size(&gs_msg.topic, &gs_msg.data)
 +                                .unwrap_or_else(|| gs_msg.data.len());
 +
                          // Notify the network
@@ -120,8 +143,54 @@ index f7d4eb9c9..0bc160c2c 100644
                          });
                      }
                  }
+@@ -1417,7 +1441,7 @@ impl<E: EthSpec> Network<E> {
+                 peer_id,
+                 group_id,
+                 message,
+-                ..
++                metadata,
+             } => {
+                 let topic = GossipTopic::decode(topic_hash.as_str())
+                     .inspect_err(|error| {
+@@ -1443,6 +1467,14 @@ impl<E: EthSpec> Network<E> {
+                             //reject the message
+                             self.gossipsub_mut()
+                                 .report_invalid_partial(peer_id, &topic_hash);
++                            return Some(NetworkEvent::PartialDataColumnPart {
++                                source: peer_id,
++                                topic,
++                                group_id,
++                                message_size: message.len(),
++                                metadata,
++                                decode_error: Some(error),
++                            });
+                         }
+                         Ok(column) => {
+                             debug!(
+@@ -1457,9 +1489,21 @@ impl<E: EthSpec> Network<E> {
+                                 source: peer_id,
+                                 column: Box::new(column),
+                                 topic,
++                                group_id,
++                                message_size: message.len(),
++                                metadata,
+                             });
+                         }
+                     }
++                } else {
++                    return Some(NetworkEvent::PartialDataColumnPart {
++                        source: peer_id,
++                        topic,
++                        group_id,
++                        message_size: 0,
++                        metadata,
++                        decode_error: None,
++                    });
+                 }
+             }
+             Event::Subscribed {
 diff --git a/beacon_node/lighthouse_network/src/types/mod.rs b/beacon_node/lighthouse_network/src/types/mod.rs
-index 155d4fd1f..bb8ecab0d 100644
+index 155d4fd..bb8ecab 100644
 --- a/beacon_node/lighthouse_network/src/types/mod.rs
 +++ b/beacon_node/lighthouse_network/src/types/mod.rs
 @@ -22,3 +22,4 @@ pub use topics::{
@@ -130,68 +199,86 @@ index 155d4fd1f..bb8ecab0d 100644
  };
 +pub use pubsub::{get_compressed_size};
 diff --git a/beacon_node/lighthouse_network/src/types/pubsub.rs b/beacon_node/lighthouse_network/src/types/pubsub.rs
-index ab4b2010d..93e6eed95 100644
+index ab4b201..ee96c1e 100644
 --- a/beacon_node/lighthouse_network/src/types/pubsub.rs
 +++ b/beacon_node/lighthouse_network/src/types/pubsub.rs
-@@ -5,6 +5,7 @@ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
+@@ -3,10 +3,13 @@
+ use super::partial::{PARTIAL_COLUMNS_VERSION_BYTE_FULU, PARTIAL_COLUMNS_VERSION_BYTE_GLOAS};
+ use crate::types::{GossipEncoding, GossipKind, GossipTopic};
  use libp2p::gossipsub::{DataTransform, Message, RawMessage, TopicHash};
++use parking_lot::Mutex;
  use snap::raw::{Decoder, Encoder, decompress_len};
  use ssz::{Decode, Encode};
-+use std::collections::HashMap;
++use std::collections::{HashMap, VecDeque};
++use std::hash::{DefaultHasher, Hash, Hasher};
  use std::io::{Error, ErrorKind};
- use std::sync::Arc;
+-use std::sync::Arc;
++use std::sync::{Arc, LazyLock};
  use types::{
-@@ -61,6 +62,27 @@ pub enum PubsubMessage<E: EthSpec> {
+     AttesterSlashing, AttesterSlashingBase, AttesterSlashingElectra, AttesterSlashingGloas,
+     CellBitmap, DataColumnSidecar, DataColumnSubnetId, EthSpec, ForkContext, ForkVersionDecode,
+@@ -61,6 +64,47 @@ pub enum PubsubMessage<E: EthSpec> {
      LightClientOptimisticUpdate(Box<LightClientOptimisticUpdate<E>>),
  }
  
-+// Thread-local storage for mapping sequence numbers to compressed message sizes
-+thread_local! {
-+    static COMPRESSED_SIZE_CACHE: std::cell::RefCell<HashMap<Option<u64>, usize>> = std::cell::RefCell::new(HashMap::new());
++/// Compressed sizes of recently decompressed gossip messages, keyed by `compressed_size_key`.
++static COMPRESSED_SIZES: LazyLock<Mutex<CompressedSizes>> = LazyLock::new(Mutex::default);
++
++const COMPRESSED_SIZES_LEN: usize = 8192;
++/// Bytes hashed from each end of a message when keying its compressed size.
++const COMPRESSED_SIZE_KEY_SPAN: usize = 4096;
++
++#[derive(Default)]
++struct CompressedSizes {
++    sizes: HashMap<u64, usize>,
++    order: VecDeque<u64>,
 +}
 +
-+/// Get the compressed size for a given sequence number (message ID)
-+pub fn get_compressed_size(sequence_number: Option<u64>) -> Option<usize> {
-+    COMPRESSED_SIZE_CACHE.with(|cache| cache.borrow().get(&sequence_number).copied())
++fn compressed_size_key(topic: &TopicHash, data: &[u8]) -> u64 {
++    let mut hasher = DefaultHasher::new();
++    topic.hash(&mut hasher);
++    data.len().hash(&mut hasher);
++    data[..data.len().min(COMPRESSED_SIZE_KEY_SPAN)].hash(&mut hasher);
++    data[data.len().saturating_sub(COMPRESSED_SIZE_KEY_SPAN)..].hash(&mut hasher);
++    hasher.finish()
 +}
 +
-+/// Clear old entries from the cache to prevent unbounded growth
-+fn cleanup_cache() {
-+    COMPRESSED_SIZE_CACHE.with(|cache| {
-+        let mut cache = cache.borrow_mut();
-+        // Keep only the last 10000 messages
-+        if cache.len() > 10000 {
-+            cache.clear();
++fn record_compressed_size(topic: &TopicHash, data: &[u8], compressed_size: usize) {
++    let key = compressed_size_key(topic, data);
++    let mut cache = COMPRESSED_SIZES.lock();
++    if cache.sizes.insert(key, compressed_size).is_none() {
++        cache.order.push_back(key);
++        if cache.order.len() > COMPRESSED_SIZES_LEN
++            && let Some(oldest) = cache.order.pop_front()
++        {
++            cache.sizes.remove(&oldest);
 +        }
-+    });
++    }
++}
++
++/// Returns the compressed size of the gossip message that decompressed to `data` on `topic`.
++pub fn get_compressed_size(topic: &TopicHash, data: &[u8]) -> Option<usize> {
++    let key = compressed_size_key(topic, data);
++    COMPRESSED_SIZES.lock().sizes.get(&key).copied()
 +}
 +
  /// A message published via the partial gossipsub protocol.
  #[derive(Debug, Clone, PartialEq)]
  pub enum PubsubPartialMessage<E: EthSpec> {
-@@ -104,8 +126,19 @@ impl SnappyTransform {
- impl DataTransform for SnappyTransform {
-     // Provides the snappy decompression from RawGossipsubMessages
-     fn inbound_transform(&self, raw_message: RawMessage) -> Result<Message, std::io::Error> {
-+        // Store the compressed size in our cache
-+        let compressed_size = raw_message.data.len();
-+        COMPRESSED_SIZE_CACHE.with(|cache| {
-+            cache
-+                .borrow_mut()
-+                .insert(raw_message.sequence_number, compressed_size);
-+        });
-+
-+        // Periodically clean up the cache
-+        cleanup_cache();
-+
-         // first check the size of the compressed payload
--        if raw_message.data.len() > self.max_compressed_len {
-+        if compressed_size > self.max_compressed_len {
-             return Err(Error::new(
-                 ErrorKind::InvalidData,
-                 "ssz_snappy encoded data > max_compressed_len",
+@@ -122,6 +166,11 @@ impl DataTransform for SnappyTransform {
+ 
+         let mut decoder = Decoder::new();
+         let decompressed_data = decoder.decompress_vec(&raw_message.data)?;
++        record_compressed_size(
++            &raw_message.topic,
++            &decompressed_data,
++            raw_message.data.len(),
++        );
+ 
+         // Build the GossipsubMessage struct
+         Ok(Message {
 diff --git a/beacon_node/network/src/lib.rs b/beacon_node/network/src/lib.rs
-index 502ef4fdb..33399c4b0 100644
+index 502ef4f..33399c4 100644
 --- a/beacon_node/network/src/lib.rs
 +++ b/beacon_node/network/src/lib.rs
 @@ -1,4 +1,6 @@
@@ -201,19 +288,121 @@ index 502ef4fdb..33399c4b0 100644
  pub mod service;
  
  mod metrics;
+diff --git a/beacon_node/network/src/network_beacon_processor/gossip_methods.rs b/beacon_node/network/src/network_beacon_processor/gossip_methods.rs
+index 404b0b3..6da4336 100644
+--- a/beacon_node/network/src/network_beacon_processor/gossip_methods.rs
++++ b/beacon_node/network/src/network_beacon_processor/gossip_methods.rs
+@@ -992,6 +992,8 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+             }
+         }
+ 
++        xatu::on_data_column_completed(data_col, xatu::CompletedVia::FullGossip, Some(&peer_id));
++
+         let result = self
+             .chain
+             .process_gossip_data_columns(vec![verified_data_column], || Ok(()))
+@@ -1056,6 +1058,7 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+     ) {
+         let block_root = *column.block_root();
+         let index = *column.index();
++        let xatu_partial = xatu::ReceivedPartial::new(peer_id, &topic, &column);
+ 
+         let result = self
+             .chain
+@@ -1094,16 +1097,18 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+                 }
+ 
+                 let verified_header = column.header().cloned();
+-                self.process_gossip_verified_partial_data_column(peer_id, column)
++                self.process_gossip_verified_partial_data_column(peer_id, column, &xatu_partial)
+                     .await;
+                 Some((slot, verified_header))
+             }
+             PartialColumnVerificationResult::ErrWithValidHeader { header, err } => {
+                 let slot = header.as_header().slot();
++                xatu_partial.record_failure(&err);
+                 self.handle_partial_verification_error(peer_id, err, block_root, index, topic);
+                 Some((slot, Some(header)))
+             }
+             PartialColumnVerificationResult::Err(err) => {
++                xatu_partial.record_failure(&err);
+                 self.handle_partial_verification_error(peer_id, err, block_root, index, topic);
+                 None
+             }
+@@ -1324,8 +1329,9 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+     /// (the Fulu assembler or the Gloas pending payload cache) via `process_gossip_partial_data_column`.
+     async fn process_gossip_verified_partial_data_column(
+         self: &Arc<Self>,
+-        _peer_id: PeerId,
++        peer_id: PeerId,
+         verified_partial: GossipVerifiedPartialDataColumn<T::EthSpec>,
++        xatu_partial: &xatu::ReceivedPartial,
+     ) {
+         let processing_start_time = Instant::now();
+         let slot = verified_partial.slot();
+@@ -1338,10 +1344,25 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+             .chain
+             .process_gossip_partial_data_column(verified_partial)
+             .await;
++        xatu_partial.record_accept(
++            slot,
++            result
++                .as_ref()
++                .ok()
++                .and_then(Option::as_ref)
++                .map_or(0, |(_, merge_result)| merge_result.added_cells),
++        );
+ 
+         // First, handle merge results (if any)
+         let result = match result {
+             Ok(Some((avail, merge_result))) => {
++                for column in &merge_result.full_columns {
++                    xatu::on_data_column_completed(
++                        column.as_data_column(),
++                        xatu::CompletedVia::PartialGossip,
++                        Some(&peer_id),
++                    );
++                }
+                 if !merge_result.full_columns.is_empty() {
+                     debug!(
+                         %block_root,
+diff --git a/beacon_node/network/src/network_beacon_processor/mod.rs b/beacon_node/network/src/network_beacon_processor/mod.rs
+index f27766a..ba258e9 100644
+--- a/beacon_node/network/src/network_beacon_processor/mod.rs
++++ b/beacon_node/network/src/network_beacon_processor/mod.rs
+@@ -968,6 +968,13 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+         let custody_columns = self.chain.custody_context.sampling_columns_for_epoch(epoch);
+         let self_cloned = self.clone();
+         let publish_fn = move |columns: Vec<KzgVerifiedCustodyDataColumn<T::EthSpec>>| {
++            for column in &columns {
++                xatu::on_data_column_completed(
++                    column.as_data_column(),
++                    xatu::CompletedVia::El,
++                    None,
++                );
++            }
+             if publish_blobs {
+                 self_cloned.publish_data_columns_gradually(
+                     columns.into_iter().map(|c| c.clone_arc()).collect(),
+@@ -1174,6 +1181,13 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+ 
+         match result {
+             Ok(Some((availability_processing_status, data_columns_to_publish))) => {
++                for column in &data_columns_to_publish {
++                    xatu::on_data_column_completed(
++                        column,
++                        xatu::CompletedVia::Reconstruction,
++                        None,
++                    );
++                }
+                 self.publish_data_columns_gradually(data_columns_to_publish, block_root);
+                 match &availability_processing_status {
+                     AvailabilityProcessingStatus::Imported(_, hash) => {
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index 05d657975..82a5839d5 100644
+index eae34f1..410da36 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
-@@ -23,6 +23,7 @@ use lighthouse_network::rpc::methods;
- use lighthouse_network::rpc::methods::RpcResponse;
- use lighthouse_network::service::Network;
- use lighthouse_network::types::{GossipKind, PubsubPartialMessage};
-+use lighthouse_network::types::SyncState;
- use lighthouse_network::{
-     Context, PeerAction, PubsubMessage, ReportSource, Response, Subnet,
-     rpc::{GoodbyeReason, RpcErrorResponse},
-@@ -49,6 +50,7 @@ use types::{
+@@ -49,6 +49,7 @@ use types::{
      SignedExecutionPayloadEnvelope, SubnetId, SyncCommitteeSubscription, SyncSubnetId,
      ValidatorSubscription,
  };
@@ -221,7 +410,7 @@ index 05d657975..82a5839d5 100644
  
  mod tests;
  
-@@ -227,6 +229,8 @@ pub struct NetworkService<T: BeaconChainTypes> {
+@@ -227,6 +228,8 @@ pub struct NetworkService<T: BeaconChainTypes> {
      gossipsub_parameter_update: tokio::time::Interval,
      /// Provides fork specific info.
      fork_context: Arc<ForkContext>,
@@ -230,7 +419,7 @@ index 05d657975..82a5839d5 100644
  }
  
  impl<T: BeaconChainTypes> NetworkService<T> {
-@@ -335,6 +339,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -335,6 +338,26 @@ impl<T: BeaconChainTypes> NetworkService<T> {
  
          // launch derived network services
  
@@ -245,11 +434,19 @@ index 05d657975..82a5839d5 100644
 +                e
 +            );
 +        });
++        let xatu_globals = network_globals.clone();
++        let optimistic_finalized_sync = beacon_chain.config.optimistic_finalized_sync;
++        xatu::set_event_gate(move || {
++            xatu::sync_state_allows_events(
++                &xatu_globals.sync_state.read(),
++                optimistic_finalized_sync,
++            )
++        });
 +
          // generate the sync message channel
          let (sync_send, sync_recv) = mpsc::unbounded_channel::<SyncMessage<T::EthSpec>>();
          let network_send = network_senders.network_send();
-@@ -398,6 +414,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -399,6 +422,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              metrics_update,
              gossipsub_parameter_update,
              fork_context,
@@ -257,7 +454,7 @@ index 05d657975..82a5839d5 100644
          };
  
          Ok((network_service, network_globals, network_senders))
-@@ -550,8 +567,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -551,8 +575,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              NetworkEvent::PubsubMessage {
                  id,
                  source,
@@ -268,12 +465,19 @@ index 05d657975..82a5839d5 100644
              } => {
                  match message {
                      // attestation information gets processed in the attestation service
-@@ -564,11 +582,11 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -565,11 +590,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                              Subnet::Attestation(subnet_id),
                              &attestation.data,
                          );
 -                        self.handle_gossip(id, source, message, should_process);
-+                        self.handle_gossip(id, source, topic, message, message_size, should_process);
++                        self.handle_gossip(
++                            id,
++                            source,
++                            topic,
++                            message,
++                            message_size,
++                            should_process,
++                        );
                      }
                      _ => {
                          // all else is handled by the router
@@ -282,7 +486,55 @@ index 05d657975..82a5839d5 100644
                      }
                  }
              }
-@@ -1402,7 +1420,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -577,9 +609,39 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+                 source,
+                 column,
+                 topic,
++                group_id,
++                message_size,
++                metadata,
+             } => {
++                xatu::on_partial_data_column_received(
++                    &source,
++                    &topic,
++                    &group_id,
++                    Some(column.as_ref()),
++                    message_size,
++                    metadata.as_deref(),
++                    None,
++                );
+                 self.handle_partial_data_column_sidecar(source, column, topic);
+             }
++            NetworkEvent::PartialDataColumnPart {
++                source,
++                topic,
++                group_id,
++                message_size,
++                metadata,
++                decode_error,
++            } => {
++                xatu::on_partial_data_column_received::<T::EthSpec>(
++                    &source,
++                    &topic,
++                    &group_id,
++                    None,
++                    message_size,
++                    metadata.as_deref(),
++                    decode_error.as_deref(),
++                );
++            }
+             NetworkEvent::NewListenAddr(multiaddr) => {
+                 self.network_globals
+                     .listen_multiaddrs
+@@ -679,6 +741,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+                 self.libp2p.publish(messages);
+             }
+             NetworkMessage::PublishPartialColumns { messages } => {
++                xatu::on_partial_data_columns_published(&messages, &self.fork_context);
+                 self.libp2p.publish_partial(messages);
+             }
+             NetworkMessage::ReportPeer {
+@@ -1403,7 +1466,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -292,133 +544,88 @@ index 05d657975..82a5839d5 100644
          should_process: bool,
      ) {
          let seen_timestamp = self
-@@ -1410,6 +1430,173 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -1411,6 +1476,130 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              .slot_clock
              .now_duration()
              .unwrap_or_default();
 +
-+        // Send to xatu if enabled and node is synced (or optimistic mode allows it)
-+        if let Some(xatu_chain) = &self.xatu_chain {
-+            // Check sync state
-+            let sync_state = self.network_globals.sync_state.read().clone();
-+
-+            // Check if optimistic sync is enabled - if so, allow events during finalized sync
-+            let is_optimistic = self
-+                .network_beacon_processor
-+                .chain
-+                .config
-+                .optimistic_finalized_sync;
-+
-+            // Allow events only when synced or backfilling (head is synced, just filling history)
-+            // Also allow during finalized sync when optimistic mode is enabled
-+            let sync_ok = match &sync_state {
-+                SyncState::Synced => true,
-+                SyncState::BackFillSyncing { .. } => true,
-+                SyncState::CustodyBackFillSyncing { .. } => true,
-+                SyncState::SyncingHead { .. } => true,
-+                SyncState::SyncingFinalized { .. } => {
-+                    if is_optimistic {
-+                        trace!(
-+                            "Allowing Xatu event during finalized sync - optimistic mode enabled"
-+                        );
-+                        true
-+                    } else {
-+                        trace!("Skipping Xatu event - still syncing finalized chain");
-+                        false
++        // Gate only the emission: gossip must still reach the beacon processor below.
++        if let Some(xatu_chain) = &self.xatu_chain
++            && xatu::events_enabled()
++        {
++            match &gossip_message {
++                PubsubMessage::BeaconBlock(block) => {
++                    if let ObserverResult::Error(e) = xatu_chain.on_gossip_block(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        block.clone(),
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing block: {}", e);
 +                    }
 +                }
-+                SyncState::SyncTransition => {
-+                    if is_optimistic {
-+                        trace!(
-+                            "Allowing Xatu event during sync transition - optimistic mode enabled"
-+                        );
-+                        true
-+                    } else {
-+                        trace!("Skipping Xatu event - in sync transition");
-+                        false
++                PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => {
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_aggregate_and_proof(
++                        message_id.clone(),
++                        peer_id,
++                        aggregate_and_proof.clone().into(),
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing aggregate: {}", e);
 +                    }
 +                }
-+                SyncState::Stalled => {
-+                    trace!("Skipping Xatu event - sync stalled, no useful peers");
-+                    false
++                PubsubMessage::Attestation(subnet_attestation) => {
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_attestation(
++                        message_id.clone(),
++                        peer_id,
++                        Arc::new(subnet_attestation.1.clone()),
++                        subnet_attestation.0,
++                        should_process,
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing attestation: {}", e);
++                    }
 +                }
-+            };
-+
-+            // Gate only the emission: gossip must still reach the beacon processor below.
-+            if sync_ok {
-+                trace!("Sending events to Xatu - sync state: {:?}", sync_state);
-+                match &gossip_message {
-+                    PubsubMessage::BeaconBlock(block) => {
-+                        if let ObserverResult::Error(e) = xatu_chain.on_gossip_block(
++                PubsubMessage::DataColumnSidecar(data) => {
++                    let (subnet_id, column_sidecar) = &**data;
++                    if let ObserverResult::Error(e) = xatu_chain.process_gossip_data_column_sidecar(
++                        message_id.clone(),
++                        peer_id,
++                        Some(self.network_globals.client(&peer_id).to_string()),
++                        *subnet_id,
++                        column_sidecar.clone(),
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    ) {
++                        debug!("Xatu error processing data column: {}", e);
++                    }
++                }
++                PubsubMessage::ExecutionPayload(envelope) => {
++                    if let ObserverResult::Error(e) = xatu_chain
++                        .process_gossip_execution_payload_envelope(
 +                            message_id.clone(),
 +                            peer_id,
 +                            Some(self.network_globals.client(&peer_id).to_string()),
-+                            block.clone(),
++                            envelope.clone().into(),
 +                            seen_timestamp,
 +                            topic.to_string(),
 +                            message_size,
-+                        ) {
-+                            debug!("Xatu error processing block: {}", e);
-+                        }
++                        )
++                    {
++                        debug!("Xatu error processing execution payload envelope: {}", e);
 +                    }
-+                    PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => {
-+                        if let ObserverResult::Error(e) = xatu_chain.process_gossip_aggregate_and_proof(
-+                            message_id.clone(),
-+                            peer_id,
-+                            aggregate_and_proof.clone().into(),
-+                            seen_timestamp,
-+                            topic.to_string(),
-+                            message_size,
-+                        ) {
-+                            debug!("Xatu error processing aggregate: {}", e);
-+                        }
-+                    }
-+                    PubsubMessage::Attestation(subnet_attestation) => {
-+                        if let ObserverResult::Error(e) = xatu_chain.process_gossip_attestation(
-+                            message_id.clone(),
-+                            peer_id,
-+                            Arc::new(subnet_attestation.1.clone()),
-+                            subnet_attestation.0,
-+                            should_process,
-+                            seen_timestamp,
-+                            topic.to_string(),
-+                            message_size,
-+                        ) {
-+                            debug!("Xatu error processing attestation: {}", e);
-+                        }
-+                    }
-+                    PubsubMessage::DataColumnSidecar(data) => {
-+                        let (subnet_id, column_sidecar) = &**data;
-+                        if let ObserverResult::Error(e) = xatu_chain.process_gossip_data_column_sidecar(
-+                            message_id.clone(),
-+                            peer_id,
-+                            Some(self.network_globals.client(&peer_id).to_string()),
-+                            *subnet_id,
-+                            column_sidecar.clone(),
-+                            seen_timestamp,
-+                            topic.to_string(),
-+                            message_size,
-+                        ) {
-+                            debug!("Xatu error processing data column: {}", e);
-+                        }
-+                    }
-+                    PubsubMessage::ExecutionPayload(envelope) => {
-+                        if let ObserverResult::Error(e) = xatu_chain
-+                            .process_gossip_execution_payload_envelope(
-+                                message_id.clone(),
-+                                peer_id,
-+                                Some(self.network_globals.client(&peer_id).to_string()),
-+                                envelope.clone().into(),
-+                                seen_timestamp,
-+                                topic.to_string(),
-+                                message_size,
-+                            )
-+                        {
-+                            debug!("Xatu error processing execution payload envelope: {}", e);
-+                        }
-+                    }
-+                    PubsubMessage::ExecutionPayloadBid(bid) => {
-+                        if let ObserverResult::Error(e) = xatu_chain.process_gossip_execution_payload_bid(
++                }
++                PubsubMessage::ExecutionPayloadBid(bid) => {
++                    if let ObserverResult::Error(e) = xatu_chain
++                        .process_gossip_execution_payload_bid(
 +                            message_id.clone(),
 +                            peer_id,
 +                            Some(self.network_globals.client(&peer_id).to_string()),
@@ -426,27 +633,29 @@ index 05d657975..82a5839d5 100644
 +                            seen_timestamp,
 +                            topic.to_string(),
 +                            message_size,
-+                        ) {
-+                            debug!("Xatu error processing execution payload bid: {}", e);
-+                        }
++                        )
++                    {
++                        debug!("Xatu error processing execution payload bid: {}", e);
 +                    }
-+                    PubsubMessage::PayloadAttestation(message) => {
-+                        if let ObserverResult::Error(e) = xatu_chain
-+                            .process_gossip_payload_attestation_message(
-+                                message_id.clone(),
-+                                peer_id,
-+                                Some(self.network_globals.client(&peer_id).to_string()),
-+                                message.clone().into(),
-+                                seen_timestamp,
-+                                topic.to_string(),
-+                                message_size,
-+                            )
-+                        {
-+                            debug!("Xatu error processing payload attestation: {}", e);
-+                        }
++                }
++                PubsubMessage::PayloadAttestation(message) => {
++                    if let ObserverResult::Error(e) = xatu_chain
++                        .process_gossip_payload_attestation_message(
++                            message_id.clone(),
++                            peer_id,
++                            Some(self.network_globals.client(&peer_id).to_string()),
++                            message.clone().into(),
++                            seen_timestamp,
++                            topic.to_string(),
++                            message_size,
++                        )
++                    {
++                        debug!("Xatu error processing payload attestation: {}", e);
 +                    }
-+                    PubsubMessage::ProposerPreferences(preferences) => {
-+                        if let ObserverResult::Error(e) = xatu_chain.process_gossip_proposer_preferences(
++                }
++                PubsubMessage::ProposerPreferences(preferences) => {
++                    if let ObserverResult::Error(e) = xatu_chain
++                        .process_gossip_proposer_preferences(
 +                            message_id.clone(),
 +                            peer_id,
 +                            Some(self.network_globals.client(&peer_id).to_string()),
@@ -454,12 +663,12 @@ index 05d657975..82a5839d5 100644
 +                            seen_timestamp,
 +                            topic.to_string(),
 +                            message_size,
-+                        ) {
-+                            debug!("Xatu error processing proposer preferences: {}", e);
-+                        }
++                        )
++                    {
++                        debug!("Xatu error processing proposer preferences: {}", e);
 +                    }
-+                    _ => {}
 +                }
++                _ => {}
 +            }
 +        }
 +
@@ -467,10 +676,10 @@ index 05d657975..82a5839d5 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index cfd687e81..73cfaf655 100644
+index 3c46936..f741851 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
-@@ -253,6 +253,24 @@ pub fn cli_app() -> Command {
+@@ -261,6 +261,24 @@ pub fn cli_app() -> Command {
                  .action(ArgAction::Set)
                  .display_order(0)
          )
@@ -496,7 +705,7 @@ index cfd687e81..73cfaf655 100644
              Arg::new("disable-upnp")
                  .long("disable-upnp")
 diff --git a/lighthouse/build.rs b/lighthouse/build.rs
-index 3d8a25ec8..cd1e97039 100644
+index 3d8a25e..cd1e970 100644
 --- a/lighthouse/build.rs
 +++ b/lighthouse/build.rs
 @@ -1,2 +1,13 @@
@@ -515,7 +724,7 @@ index 3d8a25ec8..cd1e97039 100644
 +    }
 +}
 diff --git a/lighthouse/src/main.rs b/lighthouse/src/main.rs
-index 5a403d79c..4c9ce5208 100644
+index 5a403d7..4c9ce52 100644
 --- a/lighthouse/src/main.rs
 +++ b/lighthouse/src/main.rs
 @@ -421,6 +421,22 @@ fn main() {
