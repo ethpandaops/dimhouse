@@ -42,7 +42,8 @@ dimhouse/
 │       ├── unstable-01-optimistic.patch # Extension: bypass EL validation for observation
 │       ├── v8.2.2.patch                # Same patch rebased onto the v8.2.2 release tag
 │       ├── v8.3.0-rc.0.patch           # Same patch rebased onto the v8.3.0-rc.0 tag
-│       └── release-v8.3.0.patch        # Same patch on the release-v8.3.0 branch (router merged into NetworkService)
+│       ├── release-v8.3.0.patch        # Same patch on the release-v8.3.0 branch (router merged into NetworkService)
+│       └── v8.3.2.patch                # Same patch on the v8.3.2 tag (Gloas unscheduled on Hoodi again)
 ├── ci/
 │   ├── Dockerfile.ethpandaops    # Custom Dockerfile (replaces upstream)
 │   └── disable-upstream-workflows.sh
