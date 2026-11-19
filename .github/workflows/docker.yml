@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       lighthouse_ref:
-        description: 'sigp/lighthouse branch or tag to build (needs patches/sigp/lighthouse/<ref>.patch). Refs other than unstable get <ref>-<sha7> tags and never touch latest.'
+        description: 'sigp/lighthouse branch or tag to build (needs patches/sigp/lighthouse/<ref>.patch), or daisugi-devnet-0 (scripts/prepare-daisugi-source.sh). Refs other than unstable get <ref>-<sha7> tags and never touch latest.'
         required: false
         default: unstable
         type: string
@@ -33,7 +33,11 @@ jobs:
             echo "Invalid lighthouse_ref: $LIGHTHOUSE_REF" >&2
             exit 1
           fi
-          ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
+          if [ "$LIGHTHOUSE_REF" == "daisugi-devnet-0" ]; then
+            ./scripts/prepare-daisugi-source.sh
+          else
+            ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
+          fi
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -80,7 +84,11 @@ jobs:
             echo "Invalid lighthouse_ref: $LIGHTHOUSE_REF" >&2
             exit 1
           fi
-          ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
+          if [ "$LIGHTHOUSE_REF" == "daisugi-devnet-0" ]; then
+            ./scripts/prepare-daisugi-source.sh
+          else
+            ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
+          fi
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
