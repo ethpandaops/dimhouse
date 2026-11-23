@@ -14,16 +14,27 @@ on:
         default: unstable
         type: string
 
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
-  REGISTRY: docker.io
+  REGISTRY: ghcr.io
   IMAGE_NAME: ethpandaops/dimhouse
   LIGHTHOUSE_REF: ${{ inputs.lighthouse_ref || 'unstable' }}
 
 jobs:
   build-amd64:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     outputs:
       version: ${{ steps.version.outputs.tag }}
+      digest: ${{ steps.push.outputs.digest }}
+      backfill-digest: ${{ steps.push-backfill.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,11 +50,12 @@ jobs:
             ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
           fi
 
-      - name: Login to Docker Hub
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Determine version tag
         id: version
@@ -57,24 +69,39 @@ jobs:
           fi
 
       - name: Build and push amd64 image
+        id: push
         run: |
+          set -o pipefail
           cd lighthouse
           docker build --provenance=false --sbom=false -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64 .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64 | tee "$RUNNER_TEMP/push.log"
+          digest=$(grep -oE 'digest: sha256:[a-f0-9]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
       # Backfill-enabled variant: same build with the disable-backfill feature
       # left off (FEATURES empty), so historical block backfill and
       # --reconstruct-historic-states work. Used for archive nodes.
       - name: Build and push amd64 backfill image
+        id: push-backfill
         run: |
+          set -o pipefail
           cd lighthouse
           docker build --provenance=false --sbom=false --build-arg FEATURES= -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-amd64 .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-amd64
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-amd64 | tee "$RUNNER_TEMP/push.log"
+          digest=$(grep -oE 'digest: sha256:[a-f0-9]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
   build-arm64:
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     outputs:
       version: ${{ steps.version.outputs.tag }}
+      digest: ${{ steps.push.outputs.digest }}
+      backfill-digest: ${{ steps.push-backfill.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -90,11 +117,12 @@ jobs:
             ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
           fi
 
-      - name: Login to Docker Hub
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Determine version tag
         id: version
@@ -108,69 +136,106 @@ jobs:
           fi
 
       - name: Build and push arm64 image
+        id: push
         run: |
+          set -o pipefail
           cd lighthouse
           docker build --provenance=false --sbom=false -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64 .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64 | tee "$RUNNER_TEMP/push.log"
+          digest=$(grep -oE 'digest: sha256:[a-f0-9]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
       # Backfill-enabled variant: same build with the disable-backfill feature
       # left off (FEATURES empty), so historical block backfill and
       # --reconstruct-historic-states work. Used for archive nodes.
       - name: Build and push arm64 backfill image
+        id: push-backfill
         run: |
+          set -o pipefail
           cd lighthouse
           docker build --provenance=false --sbom=false --build-arg FEATURES= -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-arm64 .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-arm64
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-arm64 | tee "$RUNNER_TEMP/push.log"
+          digest=$(grep -oE 'digest: sha256:[a-f0-9]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
   create-manifest:
     needs: [build-amd64, build-arm64]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     steps:
-      - name: Login to Docker Hub
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Create multi-arch manifest
+        id: manifest
         env:
           VERSION: ${{ needs.build-amd64.outputs.version }}
+          AMD64_DIGEST: ${{ needs.build-amd64.outputs.digest }}
+          ARM64_DIGEST: ${{ needs.build-arm64.outputs.digest }}
         run: |
-          AMD64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64"
-          ARM64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64"
+          set -o pipefail
+          AMD64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AMD64_DIGEST}"
+          ARM64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${ARM64_DIGEST}"
+          PAIRS="${VERSION}-amd64@${AMD64_DIGEST} ${VERSION}-arm64@${ARM64_DIGEST}"
 
           # Create version-specific manifest
           echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
           docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
             ${AMD64_IMAGE} ${ARM64_IMAGE}
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+          DIGEST=$(docker manifest push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}" | tail -n1)
+          PAIRS="${PAIRS} ${VERSION}@${DIGEST}"
 
           # latest only tracks unstable builds from releases and master pushes
           if [ "$LIGHTHOUSE_REF" == "unstable" ] && { [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; }; then
             echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
               ${AMD64_IMAGE} ${ARM64_IMAGE}
-            docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            DIGEST=$(docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | tail -n1)
+            PAIRS="${PAIRS} latest@${DIGEST}"
           fi
+          echo "pairs=${PAIRS}" >> "$GITHUB_OUTPUT"
 
       - name: Create backfill multi-arch manifest
+        id: backfill
         env:
           VERSION: ${{ needs.build-amd64.outputs.version }}
+          AMD64_DIGEST: ${{ needs.build-amd64.outputs.backfill-digest }}
+          ARM64_DIGEST: ${{ needs.build-arm64.outputs.backfill-digest }}
         run: |
-          AMD64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill-amd64"
-          ARM64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill-arm64"
+          set -o pipefail
+          AMD64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AMD64_DIGEST}"
+          ARM64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${ARM64_DIGEST}"
+          PAIRS="${VERSION}-backfill-amd64@${AMD64_DIGEST} ${VERSION}-backfill-arm64@${ARM64_DIGEST}"
 
           echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill"
           docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill \
             ${AMD64_IMAGE} ${ARM64_IMAGE}
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill
+          DIGEST=$(docker manifest push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill" | tail -n1)
+          PAIRS="${PAIRS} ${VERSION}-backfill@${DIGEST}"
 
           if [ "$LIGHTHOUSE_REF" == "unstable" ] && { [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; }; then
             echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill"
             docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill \
               ${AMD64_IMAGE} ${ARM64_IMAGE}
-            docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill
+            DIGEST=$(docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill | tail -n1)
+            PAIRS="${PAIRS} latest-backfill@${DIGEST}"
           fi
+          echo "pairs=${PAIRS}" >> "$GITHUB_OUTPUT"
+
+      - name: Mirror to Docker Hub
+        uses: ethpandaops/actions/mirror-image@738aeadbcdc54f1c9af659d35f8ef29dd5c0fae6
+        with:
+          image: dimhouse
+          tags: ${{ steps.manifest.outputs.pairs }} ${{ steps.backfill.outputs.pairs }}
+          mirror-url: ${{ secrets.IMAGE_MIRROR_URL }}
 
       - name: Summary
         env:
