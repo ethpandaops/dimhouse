@@ -1,15 +1,20 @@
 name: Build and Push Docker Images
 
+# master, releases and dispatches build lighthouse unstable or the dispatched
+# lighthouse_ref. A network branch, whose network.env names it, builds that
+# devnet's Lighthouse source and publishes <network> and <network>-<sha7>.
+# Pushes to other branches build nothing.
+
 on:
   push:
     branches:
-      - master
+      - '**'
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       lighthouse_ref:
-        description: 'sigp/lighthouse branch or tag to build (needs patches/sigp/lighthouse/<ref>.patch). Refs other than unstable get <ref>-<sha7> tags and never touch latest.'
+        description: 'sigp/lighthouse branch or tag to build (needs patches/sigp/lighthouse/<ref>.patch). Refs other than unstable get <ref>-<sha7> tags and never touch latest. Ignored on network branches.'
         required: false
         default: unstable
         type: string
@@ -21,10 +26,84 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ethpandaops/dimhouse
-  LIGHTHOUSE_REF: ${{ inputs.lighthouse_ref || 'unstable' }}
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      repo: ${{ steps.plan.outputs.repo }}
+      ref: ${{ steps.plan.outputs.ref }}
+      commit: ${{ steps.plan.outputs.commit }}
+      version: ${{ steps.plan.outputs.version }}
+      rolling: ${{ steps.plan.outputs.rolling }}
+      backfill: ${{ steps.plan.outputs.backfill }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decide what to build
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_REF: ${{ inputs.lighthouse_ref }}
+        run: |
+          set -euo pipefail
+          sha7=${GITHUB_SHA::7}
+          if [ -f network.env ] && [ "$(sed -n 's/^NETWORK=//p' network.env)" == "$REF_NAME" ]; then
+            source network.env
+            if [[ ! "$LIGHTHOUSE_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
+              || [[ ! "$LIGHTHOUSE_REF" =~ ^[A-Za-z0-9_][A-Za-z0-9._/-]*$ ]] \
+              || [[ ! "$LIGHTHOUSE_COMMIT" =~ ^([0-9a-f]{40})?$ ]]; then
+              echo "Invalid network.env" >&2
+              exit 1
+            fi
+            # Devnet nodes don't backfill, so network branches skip the -backfill variant.
+            {
+              echo "build=true"
+              echo "repo=$LIGHTHOUSE_REPO"
+              echo "ref=$LIGHTHOUSE_REF"
+              echo "commit=$LIGHTHOUSE_COMMIT"
+              echo "version=$NETWORK-$sha7"
+              echo "rolling=$NETWORK"
+              echo "backfill=false"
+            } >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" == "push" ] && [ "$REF_NAME" != "master" ]; then
+            echo "Not master or a network branch: nothing to build."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            ref=${INPUT_REF:-unstable}
+            if [[ ! "$ref" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
+              echo "Invalid lighthouse_ref: $ref" >&2
+              exit 1
+            fi
+            if [ "$EVENT" == "release" ]; then
+              version=$RELEASE_TAG
+            elif [ "$ref" == "unstable" ]; then
+              version=$sha7
+            else
+              version=$ref-$sha7
+            fi
+            # latest only tracks unstable builds from releases and master pushes
+            rolling=
+            if [ "$ref" == "unstable" ] && { [ "$EVENT" == "release" ] || [ "$GITHUB_REF" == "refs/heads/master" ]; }; then
+              rolling=latest
+            fi
+            {
+              echo "build=true"
+              echo "repo=sigp/lighthouse"
+              echo "ref=$ref"
+              echo "commit="
+              echo "version=$version"
+              echo "rolling=$rolling"
+              echo "backfill=true"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
   build-amd64:
+    needs: setup
+    if: needs.setup.outputs.build == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -32,19 +111,19 @@ jobs:
       id-token: write
       attestations: write
     outputs:
-      version: ${{ steps.version.outputs.tag }}
       digest: ${{ steps.push.outputs.digest }}
       backfill-digest: ${{ steps.push-backfill.outputs.digest }}
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Prepare patched source
-        run: |
-          if [[ ! "$LIGHTHOUSE_REF" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
-            echo "Invalid lighthouse_ref: $LIGHTHOUSE_REF" >&2
-            exit 1
-          fi
-          ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
+        env:
+          LIGHTHOUSE_REPO: ${{ needs.setup.outputs.repo }}
+          LIGHTHOUSE_REF: ${{ needs.setup.outputs.ref }}
+          LIGHTHOUSE_COMMIT: ${{ needs.setup.outputs.commit }}
+        run: ./scripts/dimhouse-build.sh -r "$LIGHTHOUSE_REPO" -b "$LIGHTHOUSE_REF" ${LIGHTHOUSE_COMMIT:+-c "$LIGHTHOUSE_COMMIT"} --skip-build --ci
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -53,24 +132,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Determine version tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          elif [ "$LIGHTHOUSE_REF" == "unstable" ]; then
-            echo "tag=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${LIGHTHOUSE_REF}-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build and push amd64 image
         id: push
         run: |
           set -o pipefail
           cd lighthouse
-          docker build --provenance=false --sbom=false -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64 .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-amd64 | tee "$RUNNER_TEMP/push.log"
+          docker build --provenance=false --sbom=false -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 | tee "$RUNNER_TEMP/push.log"
           digest=$(grep -oE 'digest: sha256:[a-f0-9]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2)
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
@@ -79,15 +147,18 @@ jobs:
       # --reconstruct-historic-states work. Used for archive nodes.
       - name: Build and push amd64 backfill image
         id: push-backfill
+        if: needs.setup.outputs.backfill == 'true'
         run: |
           set -o pipefail
           cd lighthouse
-          docker build --provenance=false --sbom=false --build-arg FEATURES= -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-amd64 .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-amd64 | tee "$RUNNER_TEMP/push.log"
+          docker build --provenance=false --sbom=false --build-arg FEATURES= -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill-amd64 .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill-amd64 | tee "$RUNNER_TEMP/push.log"
           digest=$(grep -oE 'digest: sha256:[a-f0-9]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2)
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
   build-arm64:
+    needs: setup
+    if: needs.setup.outputs.build == 'true'
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -95,19 +166,19 @@ jobs:
       id-token: write
       attestations: write
     outputs:
-      version: ${{ steps.version.outputs.tag }}
       digest: ${{ steps.push.outputs.digest }}
       backfill-digest: ${{ steps.push-backfill.outputs.digest }}
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Prepare patched source
-        run: |
-          if [[ ! "$LIGHTHOUSE_REF" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
-            echo "Invalid lighthouse_ref: $LIGHTHOUSE_REF" >&2
-            exit 1
-          fi
-          ./scripts/dimhouse-build.sh -r "sigp/lighthouse" -b "$LIGHTHOUSE_REF" --skip-build --ci
+        env:
+          LIGHTHOUSE_REPO: ${{ needs.setup.outputs.repo }}
+          LIGHTHOUSE_REF: ${{ needs.setup.outputs.ref }}
+          LIGHTHOUSE_COMMIT: ${{ needs.setup.outputs.commit }}
+        run: ./scripts/dimhouse-build.sh -r "$LIGHTHOUSE_REPO" -b "$LIGHTHOUSE_REF" ${LIGHTHOUSE_COMMIT:+-c "$LIGHTHOUSE_COMMIT"} --skip-build --ci
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -116,24 +187,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Determine version tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          elif [ "$LIGHTHOUSE_REF" == "unstable" ]; then
-            echo "tag=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${LIGHTHOUSE_REF}-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build and push arm64 image
         id: push
         run: |
           set -o pipefail
           cd lighthouse
-          docker build --provenance=false --sbom=false -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64 .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-arm64 | tee "$RUNNER_TEMP/push.log"
+          docker build --provenance=false --sbom=false -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64 .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64 | tee "$RUNNER_TEMP/push.log"
           digest=$(grep -oE 'digest: sha256:[a-f0-9]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2)
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
@@ -142,22 +202,26 @@ jobs:
       # --reconstruct-historic-states work. Used for archive nodes.
       - name: Build and push arm64 backfill image
         id: push-backfill
+        if: needs.setup.outputs.backfill == 'true'
         run: |
           set -o pipefail
           cd lighthouse
-          docker build --provenance=false --sbom=false --build-arg FEATURES= -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-arm64 .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}-backfill-arm64 | tee "$RUNNER_TEMP/push.log"
+          docker build --provenance=false --sbom=false --build-arg FEATURES= -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill-arm64 .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill-arm64 | tee "$RUNNER_TEMP/push.log"
           digest=$(grep -oE 'digest: sha256:[a-f0-9]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2)
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
   create-manifest:
-    needs: [build-amd64, build-arm64]
+    needs: [setup, build-amd64, build-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write
       attestations: write
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
+      ROLLING: ${{ needs.setup.outputs.rolling }}
     steps:
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -169,7 +233,6 @@ jobs:
       - name: Create multi-arch manifest
         id: manifest
         env:
-          VERSION: ${{ needs.build-amd64.outputs.version }}
           AMD64_DIGEST: ${{ needs.build-amd64.outputs.digest }}
           ARM64_DIGEST: ${{ needs.build-arm64.outputs.digest }}
         run: |
@@ -178,27 +241,19 @@ jobs:
           ARM64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${ARM64_DIGEST}"
           PAIRS="${VERSION}-amd64@${AMD64_DIGEST} ${VERSION}-arm64@${ARM64_DIGEST}"
 
-          # Create version-specific manifest
-          echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
-          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
-            ${AMD64_IMAGE} ${ARM64_IMAGE}
-          DIGEST=$(docker manifest push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}" | tail -n1)
-          PAIRS="${PAIRS} ${VERSION}@${DIGEST}"
-
-          # latest only tracks unstable builds from releases and master pushes
-          if [ "$LIGHTHOUSE_REF" == "unstable" ] && { [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; }; then
-            echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-            docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+          for TAG in ${VERSION} ${ROLLING}; do
+            echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}"
+            docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG} \
               ${AMD64_IMAGE} ${ARM64_IMAGE}
-            DIGEST=$(docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | tail -n1)
-            PAIRS="${PAIRS} latest@${DIGEST}"
-          fi
+            DIGEST=$(docker manifest push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}" | tail -n1)
+            PAIRS="${PAIRS} ${TAG}@${DIGEST}"
+          done
           echo "pairs=${PAIRS}" >> "$GITHUB_OUTPUT"
 
       - name: Create backfill multi-arch manifest
         id: backfill
+        if: needs.setup.outputs.backfill == 'true'
         env:
-          VERSION: ${{ needs.build-amd64.outputs.version }}
           AMD64_DIGEST: ${{ needs.build-amd64.outputs.backfill-digest }}
           ARM64_DIGEST: ${{ needs.build-arm64.outputs.backfill-digest }}
         run: |
@@ -207,19 +262,13 @@ jobs:
           ARM64_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${ARM64_DIGEST}"
           PAIRS="${VERSION}-backfill-amd64@${AMD64_DIGEST} ${VERSION}-backfill-arm64@${ARM64_DIGEST}"
 
-          echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill"
-          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill \
-            ${AMD64_IMAGE} ${ARM64_IMAGE}
-          DIGEST=$(docker manifest push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill" | tail -n1)
-          PAIRS="${PAIRS} ${VERSION}-backfill@${DIGEST}"
-
-          if [ "$LIGHTHOUSE_REF" == "unstable" ] && { [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; }; then
-            echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill"
-            docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill \
+          for TAG in ${VERSION} ${ROLLING}; do
+            echo "Creating manifest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-backfill"
+            docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-backfill \
               ${AMD64_IMAGE} ${ARM64_IMAGE}
-            DIGEST=$(docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill | tail -n1)
-            PAIRS="${PAIRS} latest-backfill@${DIGEST}"
-          fi
+            DIGEST=$(docker manifest push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-backfill" | tail -n1)
+            PAIRS="${PAIRS} ${TAG}-backfill@${DIGEST}"
+          done
           echo "pairs=${PAIRS}" >> "$GITHUB_OUTPUT"
 
       - name: Mirror to Docker Hub
@@ -231,16 +280,17 @@ jobs:
 
       - name: Summary
         env:
-          VERSION: ${{ needs.build-amd64.outputs.version }}
+          LIGHTHOUSE_SOURCE: ${{ needs.setup.outputs.repo }}@${{ needs.setup.outputs.ref }} ${{ needs.setup.outputs.commit }}
+          BACKFILL: ${{ needs.setup.outputs.backfill }}
         run: |
           echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Lighthouse ref:** \`${LIGHTHOUSE_REF}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Lighthouse source:** \`${LIGHTHOUSE_SOURCE}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Images:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-backfill\` (backfill + historic-state reconstruction enabled)" >> $GITHUB_STEP_SUMMARY
-          if [ "$LIGHTHOUSE_REF" == "unstable" ] && { [ "${{ github.event_name }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; }; then
-            echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
-            echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-backfill\`" >> $GITHUB_STEP_SUMMARY
-          fi
+          for TAG in ${VERSION} ${ROLLING}; do
+            echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}\`" >> $GITHUB_STEP_SUMMARY
+            if [ "$BACKFILL" == "true" ]; then
+              echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-backfill\` (backfill + historic-state reconstruction enabled)" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

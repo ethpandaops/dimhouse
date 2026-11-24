@@ -1,0 +1,48 @@
+name: Devnet branches
+
+# Creates branch <network> for every ethpandaops devnet that runs Lighthouse and
+# has no dimhouse branch yet, then dispatches docker.yml on it (see
+# scripts/devnet-branches.py). Only runs on master create branches; pull
+# requests, other refs and dry_run dispatches only report.
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report what would be created without pushing
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+    paths:
+      - .github/workflows/devnet-branches.yml
+      - scripts/devnet-branches.py
+
+concurrency:
+  group: devnet-branches
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install pyyaml
+
+      - name: Create missing devnet branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ github.ref != 'refs/heads/master' || inputs.dry_run == true }}
+        run: |
+          if [ "$DRY_RUN" == "true" ]; then set -- --dry-run; fi
+          python3 scripts/devnet-branches.py "$@"

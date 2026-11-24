@@ -272,8 +272,30 @@ kurtosis enclave rm -f dimhouse
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `check-patches.yml` | Daily (cron) | Clones upstream, applies patches, builds. Auto-commits if patches needed updating |
-| `docker.yml` | Push to master / release / manual | Builds + pushes multi-arch Docker image to `ethpandaops/dimhouse:<tag>` |
+| `docker.yml` | Push to master or a network branch / release / manual | Builds + pushes multi-arch Docker image to `ethpandaops/dimhouse:<tag>` |
+| `devnet-branches.yml` | Hourly (cron) / manual / PR (dry run) | Creates a network branch for every devnet that lacks one |
 | `validate-patches.yml` | PR | Validates patch file structure (hunk counts, etc.) |
+
+### Devnet images
+
+Every ethpandaops devnet that runs Lighthouse gets `ethpandaops/dimhouse:<network>`, built from branch `<network>` of this repo. A devnet's network name is `<class>-<dir>`, from the repo `ethpandaops/<class>-devnets` and a directory under its `kubernetes/`, such as `glamsterdam-devnet-8` for `glamsterdam-devnets/kubernetes/devnet-8`. A directory that already starts with `<class>-` is the name as is: `pk-devnets/kubernetes/pk-devnet-0` is `pk-devnet-0`.
+
+A network branch has a `network.env` naming the Lighthouse source to build:
+
+```bash
+NETWORK=glamsterdam-devnet-8
+LIGHTHOUSE_REPO=sigp/lighthouse
+LIGHTHOUSE_REF=v8.3.1
+LIGHTHOUSE_COMMIT=          # optional: a full SHA to pin within LIGHTHOUSE_REF
+```
+
+Each push to the branch (or dispatch of `docker.yml` on it) publishes `<network>` and `<network>-<sha7>`. Network images have no `-backfill` variant.
+
+`devnet-branches.yml` runs `scripts/devnet-branches.py` hourly. For each devnet without a branch it resolves the `lighthouse` image in `ansible/inventories/<dir>/group_vars/all/images.yaml` to a source repo and ref through [eth-client-docker-image-builder](https://github.com/ethpandaops/eth-client-docker-image-builder), applies the patch and overlay to it (trying `patches/<org>/<repo>/<ref>.patch` first, then the other patches), and if one applies, pushes branch `<network>` from master with that patch and `network.env`, then dispatches `docker.yml` on it. It never changes an existing branch. Devnets it can't resolve, or where no patch applies, are listed in the job summary; to add one, commit a rebased `patches/<org>/<repo>/<ref>.patch` to master and the next run creates the branch. To see what it would do:
+
+```bash
+GH_TOKEN=$(gh auth token) python3 scripts/devnet-branches.py --dry-run
+```
 
 ### Building a pinned Lighthouse release
 
