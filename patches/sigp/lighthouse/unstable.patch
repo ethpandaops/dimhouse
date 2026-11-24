@@ -1,5 +1,5 @@
 diff --git a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
-index db4d956..3c451e9 100644
+index 6060ae0..ff7e291 100644
 --- a/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 +++ b/beacon_node/beacon_chain/src/fetch_blobs/fetch_blobs_beacon_adapter.rs
 @@ -55,6 +55,11 @@ impl<T: BeaconChainTypes> FetchBlobsBeaconAdapter<T> {
@@ -48,7 +48,7 @@ index c3f923b..744bca2 100644
              Ok(()) => {
                  let mut state = self.state.write().await;
 diff --git a/beacon_node/execution_layer/src/lib.rs b/beacon_node/execution_layer/src/lib.rs
-index 4fbb792..435ae75 100644
+index 9da9c40..47c01ce 100644
 --- a/beacon_node/execution_layer/src/lib.rs
 +++ b/beacon_node/execution_layer/src/lib.rs
 @@ -67,6 +67,12 @@ mod payload_status;
@@ -64,7 +64,7 @@ index 4fbb792..435ae75 100644
  /// Indicates the default jwt authenticated execution endpoint.
  pub const DEFAULT_EXECUTION_ENDPOINT: &str = "http://localhost:8551/";
  
-@@ -1446,6 +1452,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+@@ -1447,6 +1453,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
          &self,
          new_payload_request: NewPayloadRequest<'_, E>,
      ) -> Result<PayloadStatus, Error> {
@@ -76,7 +76,7 @@ index 4fbb792..435ae75 100644
          let _timer = metrics::start_timer_vec(
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::NEW_PAYLOAD],
-@@ -1561,6 +1572,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
+@@ -1562,6 +1573,11 @@ impl<E: EthSpec> ExecutionLayer<E> {
          head_payload_status: fork_choice::PayloadStatus,
          custody_columns: &[ColumnIndex],
      ) -> Result<PayloadStatus, Error> {
@@ -89,10 +89,10 @@ index 4fbb792..435ae75 100644
              &metrics::EXECUTION_LAYER_REQUEST_TIMES,
              &[metrics::FORKCHOICE_UPDATED],
 diff --git a/beacon_node/lighthouse_network/src/service/mod.rs b/beacon_node/lighthouse_network/src/service/mod.rs
-index 4f06126..2dcf311 100644
+index 6f61e56..c8c6df5 100644
 --- a/beacon_node/lighthouse_network/src/service/mod.rs
 +++ b/beacon_node/lighthouse_network/src/service/mod.rs
-@@ -107,6 +107,8 @@ pub enum NetworkEvent<E: EthSpec> {
+@@ -108,6 +108,8 @@ pub enum NetworkEvent<E: EthSpec> {
          topic: TopicHash,
          /// The message itself.
          message: PubsubMessage<E>,
@@ -101,7 +101,7 @@ index 4f06126..2dcf311 100644
      },
      /// A partial data column sidecar received via gossipsub partial protocol.
      PartialDataColumnSidecar {
-@@ -116,6 +118,22 @@ pub enum NetworkEvent<E: EthSpec> {
+@@ -117,6 +119,22 @@ pub enum NetworkEvent<E: EthSpec> {
          column: Box<PartialDataColumn<E>>,
          /// The topic that this message was sent on.
          topic: GossipTopic,
@@ -124,7 +124,7 @@ index 4f06126..2dcf311 100644
      },
      /// Inform the network to send a Status to this peer.
      StatusPeer(PeerId),
-@@ -1402,12 +1420,18 @@ impl<E: EthSpec> Network<E> {
+@@ -1398,12 +1416,18 @@ impl<E: EthSpec> Network<E> {
                          );
                      }
                      Ok(msg) => {
@@ -143,7 +143,7 @@ index 4f06126..2dcf311 100644
                          });
                      }
                  }
-@@ -1417,7 +1441,7 @@ impl<E: EthSpec> Network<E> {
+@@ -1413,7 +1437,7 @@ impl<E: EthSpec> Network<E> {
                  peer_id,
                  group_id,
                  message,
@@ -152,7 +152,7 @@ index 4f06126..2dcf311 100644
              } => {
                  let topic = GossipTopic::decode(topic_hash.as_str())
                      .inspect_err(|error| {
-@@ -1443,6 +1467,14 @@ impl<E: EthSpec> Network<E> {
+@@ -1439,6 +1463,14 @@ impl<E: EthSpec> Network<E> {
                              //reject the message
                              self.gossipsub_mut()
                                  .report_invalid_partial(peer_id, &topic_hash);
@@ -167,7 +167,7 @@ index 4f06126..2dcf311 100644
                          }
                          Ok(column) => {
                              debug!(
-@@ -1457,9 +1489,21 @@ impl<E: EthSpec> Network<E> {
+@@ -1453,9 +1485,21 @@ impl<E: EthSpec> Network<E> {
                                  source: peer_id,
                                  column: Box::new(column),
                                  topic,
@@ -289,10 +289,10 @@ index 502ef4f..33399c4 100644
  
  mod metrics;
 diff --git a/beacon_node/network/src/network_beacon_processor/gossip_methods.rs b/beacon_node/network/src/network_beacon_processor/gossip_methods.rs
-index 404b0b3..6da4336 100644
+index 7fbe631..d78f930 100644
 --- a/beacon_node/network/src/network_beacon_processor/gossip_methods.rs
 +++ b/beacon_node/network/src/network_beacon_processor/gossip_methods.rs
-@@ -992,6 +992,8 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+@@ -993,6 +993,8 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
              }
          }
  
@@ -301,7 +301,7 @@ index 404b0b3..6da4336 100644
          let result = self
              .chain
              .process_gossip_data_columns(vec![verified_data_column], || Ok(()))
-@@ -1056,6 +1058,7 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+@@ -1057,6 +1059,7 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
      ) {
          let block_root = *column.block_root();
          let index = *column.index();
@@ -309,7 +309,7 @@ index 404b0b3..6da4336 100644
  
          let result = self
              .chain
-@@ -1094,16 +1097,18 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+@@ -1095,16 +1098,18 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
                  }
  
                  let verified_header = column.header().cloned();
@@ -329,7 +329,7 @@ index 404b0b3..6da4336 100644
                  self.handle_partial_verification_error(peer_id, err, block_root, index, topic);
                  None
              }
-@@ -1324,8 +1329,9 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+@@ -1325,8 +1330,9 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
      /// (the Fulu assembler or the Gloas pending payload cache) via `process_gossip_partial_data_column`.
      async fn process_gossip_verified_partial_data_column(
          self: &Arc<Self>,
@@ -340,7 +340,7 @@ index 404b0b3..6da4336 100644
      ) {
          let processing_start_time = Instant::now();
          let slot = verified_partial.slot();
-@@ -1338,10 +1344,25 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+@@ -1339,10 +1345,25 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
              .chain
              .process_gossip_partial_data_column(verified_partial)
              .await;
@@ -367,10 +367,10 @@ index 404b0b3..6da4336 100644
                      debug!(
                          %block_root,
 diff --git a/beacon_node/network/src/network_beacon_processor/mod.rs b/beacon_node/network/src/network_beacon_processor/mod.rs
-index f27766a..ba258e9 100644
+index c613a2e..4700176 100644
 --- a/beacon_node/network/src/network_beacon_processor/mod.rs
 +++ b/beacon_node/network/src/network_beacon_processor/mod.rs
-@@ -968,6 +968,13 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+@@ -1009,6 +1009,13 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
          let custody_columns = self.chain.custody_context.sampling_columns_for_epoch(epoch);
          let self_cloned = self.clone();
          let publish_fn = move |columns: Vec<KzgVerifiedCustodyDataColumn<T::EthSpec>>| {
@@ -384,7 +384,7 @@ index f27766a..ba258e9 100644
              if publish_blobs {
                  self_cloned.publish_data_columns_gradually(
                      columns.into_iter().map(|c| c.clone_arc()).collect(),
-@@ -1174,6 +1181,13 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
+@@ -1215,6 +1222,13 @@ impl<T: BeaconChainTypes> NetworkBeaconProcessor<T> {
  
          match result {
              Ok(Some((availability_processing_status, data_columns_to_publish))) => {
@@ -397,20 +397,20 @@ index f27766a..ba258e9 100644
 +                }
                  self.publish_data_columns_gradually(data_columns_to_publish, block_root);
                  match &availability_processing_status {
-                     AvailabilityProcessingStatus::Imported(_, hash) => {
+                     AvailabilityProcessingStatus::Imported(imported_slot, imported_root) => {
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index eae34f1..dd5aa64 100644
+index 2786acc..8d2c64a 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
-@@ -49,6 +49,7 @@ use types::{
-     SignedExecutionPayloadEnvelope, SubnetId, SyncCommitteeSubscription, SyncSubnetId,
-     ValidatorSubscription,
+@@ -50,6 +50,7 @@ use types::{
+     SignedBeaconBlock, SignedExecutionPayloadEnvelope, SubnetId, SyncCommitteeSubscription,
+     SyncSubnetId, ValidatorSubscription,
  };
 +use xatu::ObserverResult;
  
  mod tests;
  
-@@ -227,6 +228,8 @@ pub struct NetworkService<T: BeaconChainTypes> {
+@@ -235,6 +236,8 @@ pub struct NetworkService<T: BeaconChainTypes> {
      gossipsub_parameter_update: tokio::time::Interval,
      /// Provides fork specific info.
      fork_context: Arc<ForkContext>,
@@ -419,7 +419,7 @@ index eae34f1..dd5aa64 100644
  }
  
  impl<T: BeaconChainTypes> NetworkService<T> {
-@@ -335,6 +338,27 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -343,6 +346,27 @@ impl<T: BeaconChainTypes> NetworkService<T> {
  
          // launch derived network services
  
@@ -447,7 +447,7 @@ index eae34f1..dd5aa64 100644
          // generate the sync message channel
          let (sync_send, sync_recv) = mpsc::unbounded_channel::<SyncMessage<T::EthSpec>>();
          let network_send = network_senders.network_send();
-@@ -399,6 +423,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -407,6 +431,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              metrics_update,
              gossipsub_parameter_update,
              fork_context,
@@ -455,7 +455,7 @@ index eae34f1..dd5aa64 100644
          };
  
          Ok((network_service, network_globals, network_senders))
-@@ -551,8 +576,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -559,8 +584,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              NetworkEvent::PubsubMessage {
                  id,
                  source,
@@ -466,7 +466,7 @@ index eae34f1..dd5aa64 100644
              } => {
                  match message {
                      // attestation information gets processed in the attestation service
-@@ -565,11 +591,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -573,11 +599,18 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                              Subnet::Attestation(subnet_id),
                              &attestation.data,
                          );
@@ -481,13 +481,13 @@ index eae34f1..dd5aa64 100644
 +                        );
                      }
                      _ => {
-                         // all else is handled by the router
+                         // everything else is dispatched straight to the beacon processor
 -                        self.handle_gossip(id, source, message, true);
 +                        self.handle_gossip(id, source, topic, message, message_size, true);
                      }
                  }
              }
-@@ -577,9 +610,39 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -585,9 +618,39 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                  source,
                  column,
                  topic,
@@ -527,15 +527,15 @@ index eae34f1..dd5aa64 100644
              NetworkEvent::NewListenAddr(multiaddr) => {
                  self.network_globals
                      .listen_multiaddrs
-@@ -679,6 +742,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -687,6 +750,7 @@ impl<T: BeaconChainTypes> NetworkService<T> {
                  self.libp2p.publish(messages);
              }
              NetworkMessage::PublishPartialColumns { messages } => {
 +                xatu::on_partial_data_columns_published(&messages);
                  self.libp2p.publish_partial(messages);
              }
-             NetworkMessage::ReportPeer {
-@@ -1403,7 +1467,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+             NetworkMessage::FetchBlockColumns {
+@@ -1419,7 +1483,9 @@ impl<T: BeaconChainTypes> NetworkService<T> {
          &mut self,
          message_id: MessageId,
          peer_id: PeerId,
@@ -545,7 +545,7 @@ index eae34f1..dd5aa64 100644
          should_process: bool,
      ) {
          let seen_timestamp = self
-@@ -1411,6 +1477,130 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -1427,6 +1493,130 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              .slot_clock
              .now_duration()
              .unwrap_or_default();
@@ -677,7 +677,7 @@ index eae34f1..dd5aa64 100644
              PubsubMessage::AggregateAndProofAttestation(aggregate_and_proof) => self
                  .handle_beacon_processor_send_result(
 diff --git a/beacon_node/src/cli.rs b/beacon_node/src/cli.rs
-index 3c46936..f741851 100644
+index 089b26f..b1b3470 100644
 --- a/beacon_node/src/cli.rs
 +++ b/beacon_node/src/cli.rs
 @@ -261,6 +261,24 @@ pub fn cli_app() -> Command {
