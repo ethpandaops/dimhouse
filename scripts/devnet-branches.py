@@ -3,8 +3,10 @@
 
 A devnet's network name is <class>-<dir>: <class> is the repository
 ethpandaops/<class>-devnets without "-devnets", and <dir> is a directory under
-kubernetes/ there. Branch <network> holds what that devnet's dimhouse is built
-from, and docker.yml publishes ethpandaops/dimhouse:<network> from it.
+kubernetes/ there. A <dir> that already starts with <class>- is the network
+name as is (pk-devnets/kubernetes/pk-devnet-0 is pk-devnet-0). Branch
+<network> holds what that devnet's dimhouse is built from, and docker.yml
+publishes ethpandaops/dimhouse:<network> from it.
 
 For each network without a branch, the Lighthouse image in the devnet's
 ansible/inventories/<dir>/group_vars/all/images.yaml is resolved to a source
@@ -85,9 +87,12 @@ def discover():
         if not name.endswith("-devnets") or repo["archived"] or name in EXCLUDED_REPOS:
             continue
         entries = api(f"/repos/{ORG}/{name}/contents/kubernetes") or []
+        cls = name.removesuffix("-devnets")
         for entry in sorted(entries, key=lambda e: e["name"]):
             if entry["type"] == "dir":
-                yield f"{name.removesuffix('-devnets')}-{entry['name']}", name, entry["name"]
+                dirname = entry["name"]
+                network = dirname if dirname.startswith(f"{cls}-") else f"{cls}-{dirname}"
+                yield network, name, dirname
 
 
 def lighthouse_image(repo, dirname):

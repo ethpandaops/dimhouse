@@ -278,7 +278,7 @@ kurtosis enclave rm -f dimhouse
 
 ### Devnet images
 
-Every ethpandaops devnet that runs Lighthouse gets `ethpandaops/dimhouse:<network>`, built from branch `<network>` of this repo. A devnet's network name is `<class>-<dir>`, from the repo `ethpandaops/<class>-devnets` and a directory under its `kubernetes/`, such as `glamsterdam-devnet-8`.
+Every ethpandaops devnet that runs Lighthouse gets `ethpandaops/dimhouse:<network>`, built from branch `<network>` of this repo. A devnet's network name is `<class>-<dir>`, from the repo `ethpandaops/<class>-devnets` and a directory under its `kubernetes/`, such as `glamsterdam-devnet-8` for `glamsterdam-devnets/kubernetes/devnet-8`. A directory that already starts with `<class>-` is the name as is: `pk-devnets/kubernetes/pk-devnet-0` is `pk-devnet-0`.
 
 A network branch has a `network.env` naming the Lighthouse source to build:
 
