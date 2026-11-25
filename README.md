@@ -46,6 +46,7 @@ dimhouse/
 │       └── v8.3.2.patch                # Same patch on the v8.3.2 tag (Gloas unscheduled on Hoodi again)
 ├── ci/
 │   ├── Dockerfile.ethpandaops    # Custom Dockerfile (replaces upstream)
+│   ├── Dockerfile.<ref>          # Per-ref Dockerfile, used instead when present
 │   └── disable-upstream-workflows.sh
 ├── .github/workflows/
 │   ├── check-patches.yml         # Daily: verify patches apply + build
@@ -136,6 +137,8 @@ Instead of patching workflow renames, a simple script renames all non-dimhouse w
 ### Dockerfile as Overlay
 
 Instead of patching the upstream Dockerfile, `ci/Dockerfile.ethpandaops` is copied over the upstream Dockerfile during apply.
+
+A ref that needs a different image has its own `ci/Dockerfile.<ref>`, which is used instead. `ci/Dockerfile.pq-devnet-0` builds with the devnet's Rust toolchain and features and adds the `leanvm-sidecar` prover and the `lighthouse-pq-bn` wrapper, since PQ Lighthouse needs `--pq-prover-socket`. Run the beacon node there as `lighthouse-pq-bn <beacon_node flags>` (`LEANVM_THREADS` sets the prover's threads).
 
 ### Patches
 
