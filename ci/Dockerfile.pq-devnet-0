@@ -1,0 +1,28 @@
+ARG LEANVM_REV=bindings-v0.16.0
+FROM ghcr.io/ethpandaops/leanvm-sidecar:${LEANVM_REV} AS sidecar
+
+FROM rust:1.99.1-bookworm AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends clang cmake libclang-dev protobuf-compiler \
+  && rm -rf /var/lib/apt/lists/*
+COPY . lighthouse
+ARG FEATURES=spec-minimal,portable,disable-backfill
+ARG PROFILE=release
+ARG CARGO_USE_GIT_CLI=true
+ARG TARGETARCH
+ENV FEATURES=$FEATURES
+ENV PROFILE=$PROFILE
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=$CARGO_USE_GIT_CLI
+RUN cd lighthouse \
+  && if [ "$TARGETARCH" = arm64 ]; then export JEMALLOC_SYS_WITH_LG_PAGE=16; fi \
+  && if [ "$TARGETARCH" = amd64 ]; then export RUSTFLAGS="-C target-cpu=x86-64-v3"; fi \
+  && make
+
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3t64 libstdc++6 \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=sidecar /usr/local/bin/leanvm-sidecar /usr/local/bin/leanvm-sidecar
+COPY --from=sidecar /usr/local/lib/leanvm-sidecar /usr/local/lib/leanvm-sidecar
+COPY scripts/local_testnet/pq-genesis/lighthouse-pq-bn /usr/local/bin/lighthouse-pq-bn
+COPY --from=builder /usr/local/cargo/bin/lighthouse /usr/local/bin/lighthouse
+ENV LD_LIBRARY_PATH=/usr/local/lib
+COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so

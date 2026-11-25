@@ -19,7 +19,7 @@ scripts/         - Build, apply, save, update-deps, and validate scripts
 
 ## How is this repo used?
 
-1. `scripts/apply-dimhouse-patch.sh` applies patches, copies overlay/xatu, copies ci/Dockerfile.ethpandaops, injects Cargo.toml deps via `scripts/update-deps.sh`, and disables upstream workflows
+1. `scripts/apply-dimhouse-patch.sh` applies patches, copies overlay/xatu, copies ci/Dockerfile.<ref> (or ci/Dockerfile.ethpandaops when there is none), injects Cargo.toml deps via `scripts/update-deps.sh`, and disables upstream workflows
 2. `scripts/dimhouse-build.sh` orchestrates clone + apply + build (supports `--skip-build` for Docker CI)
 3. `scripts/save-patch.sh` strips overlay/CI/dep artifacts and generates a clean patch
 
