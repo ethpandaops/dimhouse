@@ -273,8 +273,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         message_size: usize,
     ) -> ObserverResult {
         let slot = block.slot();
-        let signed_block_header = block.signed_block_header();
-        let block_root = signed_block_header.message.canonical_root();
+        let block_root = block.canonical_root();
         debug!(
             "Xatu FFI: Received gossip block - slot: {}, root: 0x{}, message_id: {:?}",
             slot,
@@ -353,7 +352,26 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         topic: String,
         message_size: usize,
     ) -> ObserverResult {
-        let beacon_block_root = attestation.data.beacon_block_root;
+        #[cfg(xatu_pq)]
+        let (data, committee_index, attester_index, signature) = (
+            attestation.data(),
+            attestation.committee_index(),
+            attestation.attester_index(),
+            match &*attestation {
+                SingleAttestation::Electra(attestation) => {
+                    signature_hex(&attestation.signature.serialize())
+                }
+                SingleAttestation::Pq(attestation) => signature_hex(attestation.signature.as_bytes()),
+            },
+        );
+        #[cfg(not(xatu_pq))]
+        let (data, committee_index, attester_index, signature) = (
+            &attestation.data,
+            attestation.committee_index,
+            attestation.attester_index,
+            signature_hex(&attestation.signature.serialize()),
+        );
+        let beacon_block_root = data.beacon_block_root;
         debug!(
             "Xatu FFI: Received gossip attestation - subnet: {}, beacon_block_root: 0x{}, message_id: {:?}",
             *subnet_id,
@@ -366,7 +384,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             return ObserverResult::Ok;
         }
 
-        let slot = attestation.data.slot;
+        let slot = data.slot;
         let slot_u64 = slot.as_u64();
 
         // Get network info for epoch calculation
@@ -392,17 +410,17 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             topic,
             message_size: message_size as u32,
             // Additional attestation data fields
-            source_epoch: attestation.data.source.epoch.as_u64(),
-            source_root: format!("0x{}", hex::encode(attestation.data.source.root.0)),
-            target_epoch: attestation.data.target.epoch.as_u64(),
-            target_root: format!("0x{}", hex::encode(attestation.data.target.root.0)),
-            committee_index: attestation.committee_index,
+            source_epoch: data.source.epoch.as_u64(),
+            source_root: format!("0x{}", hex::encode(data.source.root.0)),
+            target_epoch: data.target.epoch.as_u64(),
+            target_root: format!("0x{}", hex::encode(data.target.root.0)),
+            committee_index,
             // Aggregation and signature fields
             // For single attestations, we don't have aggregation bits, so we'll use an empty string
             aggregation_bits: String::from("0x"),
-            signature: format!("0x{}", hex::encode(attestation.signature.serialize())),
+            signature,
             // Validator specific fields
-            attester_index: attestation.attester_index,
+            attester_index,
         };
 
         debug!(
@@ -486,7 +504,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
                 .unwrap_or(attestation_data.index),
             // Aggregation and signature fields
             aggregation_bits: aggregation_bits_hex(aggregate.message().aggregate()),
-            signature: format!("0x{}", hex::encode(aggregate.signature().serialize())),
+            signature: aggregate_signature_hex(&aggregate),
         };
 
         debug!(
@@ -696,12 +714,27 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         topic: String,
         message_size: usize,
     ) -> ObserverResult {
-        let message = &envelope.message;
-        let slot = message.slot();
+        #[cfg(xatu_pq)]
+        let (slot, builder_index, beacon_block_root, payload) = (
+            envelope.slot(),
+            match &*envelope {
+                SignedExecutionPayloadEnvelope::Gloas(envelope) => envelope.message.builder_index,
+                SignedExecutionPayloadEnvelope::Pq(envelope) => envelope.message.builder_index,
+            },
+            envelope.beacon_block_root(),
+            envelope.payload(),
+        );
+        #[cfg(not(xatu_pq))]
+        let (slot, builder_index, beacon_block_root, payload) = (
+            envelope.message.slot(),
+            envelope.message.builder_index,
+            envelope.message.beacon_block_root,
+            &envelope.message.payload,
+        );
 
         debug!(
             "Xatu FFI: Received gossip execution payload envelope - slot: {}, builder: {}, message_id: {:?}",
-            slot, message.builder_index, message_id
+            slot, builder_index, message_id
         );
 
         if !self.initialized.load(Ordering::Relaxed) {
@@ -725,10 +758,10 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             peer_id: peer_id.to_string(),
             slot: slot_u64,
             epoch,
-            builder_index: message.builder_index,
-            beacon_block_root: format!("0x{}", hex::encode(message.beacon_block_root.0)),
-            block_hash: format!("0x{}", hex::encode(message.payload.block_hash.0.as_slice())),
-            state_root: format!("0x{}", hex::encode(message.payload.state_root.0)),
+            builder_index,
+            beacon_block_root: format!("0x{}", hex::encode(beacon_block_root.0)),
+            block_hash: format!("0x{}", hex::encode(payload.block_hash.0.as_slice())),
+            state_root: format!("0x{}", hex::encode(payload.state_root.0)),
             timestamp_ms: timestamp_millis as i64,
             message_id: hex::encode(&message_id.0),
             topic,
@@ -820,12 +853,15 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         topic: String,
         message_size: usize,
     ) -> ObserverResult {
-        let data = &message.data;
+        #[cfg(xatu_pq)]
+        let (data, validator_index) = (message.data(), *message.validator_index());
+        #[cfg(not(xatu_pq))]
+        let (data, validator_index) = (&message.data, message.validator_index);
         let slot = data.slot;
 
         debug!(
             "Xatu FFI: Received gossip payload attestation message - slot: {}, validator: {}, present: {}, message_id: {:?}",
-            slot, message.validator_index, data.payload_present, message_id
+            slot, validator_index, data.payload_present, message_id
         );
 
         if !self.initialized.load(Ordering::Relaxed) {
@@ -849,7 +885,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             peer_id: peer_id.to_string(),
             slot: slot_u64,
             epoch,
-            validator_index: message.validator_index,
+            validator_index,
             beacon_block_root: format!("0x{}", hex::encode(data.beacon_block_root.0)),
             payload_present: data.payload_present,
             blob_data_available: data.blob_data_available,
@@ -880,6 +916,9 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         topic: String,
         message_size: usize,
     ) -> ObserverResult {
+        #[cfg(xatu_pq)]
+        let message = preferences.message();
+        #[cfg(not(xatu_pq))]
         let message = &preferences.message;
         let slot = message.proposal_slot;
 
@@ -1150,6 +1189,26 @@ impl Drop for XatuObserver {
             XatuFFI::close();
         }
     }
+}
+
+fn signature_hex(bytes: &[u8]) -> String {
+    format!("0x{}", hex::encode(bytes))
+}
+
+/// Hex-encodes the aggregator's signature: BLS before PQ, XMSS from PQ.
+#[cfg(xatu_pq)]
+fn aggregate_signature_hex<E: EthSpec>(aggregate: &SignedAggregateAndProof<E>) -> String {
+    match aggregate.signature_pq() {
+        Ok(signature) => signature_hex(signature.as_bytes()),
+        Err(_) => aggregate
+            .signature()
+            .map_or_else(|_| String::from("0x"), |signature| signature_hex(&signature.serialize())),
+    }
+}
+
+#[cfg(not(xatu_pq))]
+fn aggregate_signature_hex<E: EthSpec>(aggregate: &SignedAggregateAndProof<E>) -> String {
+    signature_hex(&aggregate.signature().serialize())
 }
 
 /// Hex-encodes raw aggregation bits for every attestation variant the linked `types` crate defines.
