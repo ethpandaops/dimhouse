@@ -14,6 +14,18 @@ On top of the pre-Gloas gossip events, the router forwards the EIP-7732 gossip t
 | `proposer_preferences` | `LIBP2P_TRACE_GOSSIPSUB_PROPOSER_PREFERENCES` |
 | `data_column_sidecar_*` (Gloas shape) | `LIBP2P_TRACE_GOSSIPSUB_DATA_COLUMN_SIDECAR` |
 
+## Partial data columns
+
+Lighthouse v8.3.0 disseminates PeerDAS columns cell by cell with the gossipsub partial messages extension (`--enable-partial-columns`, on by default). A column assembled from cells never arrives as a gossip message, so the `release-v8.3.0` and `unstable` patches export these instead:
+
+| xatu event | Emitted when |
+|---|---|
+| `LIBP2P_TRACE_GOSSIPSUB_PARTIAL_DATA_COLUMN` | A partial part reaches Lighthouse (`RECV`, including metadata-only parts and parts that fail to decode) or Lighthouse hands its partials to gossipsub for publishing (`SEND`, no peer). Capture point is `APP`: gossipsub has already dropped redundant parts. |
+| `LIBP2P_TRACE_DATA_COLUMN_COMPLETED` | A custody column becomes complete via full gossip, partial gossip, the EL (`getBlobs`) or reconstruction. Reported once per block root and column. |
+| `LIBP2P_TRACE_GOSSIPSUB_PARTIAL_DATA_COLUMN_OUTCOME` | A received partial is decoded and verified (`ACCEPT`, `IGNORE` or `REJECT`, with the Lighthouse error variant as the reason). |
+
+`cells_from_el` on completions is derived as the cells not received through accepted partials. These events need xatu-sidecar v0.0.8 or later. The overlay only compiles them against Lighthouse versions with the fork-aware partial types (`xatu_partial_columns` cfg in `overlay/xatu/build.rs`).
+
 ## Overview
 
 Dimhouse uses a **patch + overlay** approach instead of maintaining a full fork. The repo stores only custom code and small patches; upstream Lighthouse is cloned fresh each build.
@@ -28,7 +40,10 @@ dimhouse/
 │   └── sigp/lighthouse/
 │       ├── unstable.patch              # Base patch: gossip hooks, xatu init, CLI flag
 │       ├── unstable-01-optimistic.patch # Extension: bypass EL validation for observation
-│       └── v8.2.2.patch                # Same patch rebased onto the v8.2.2 release tag
+│       ├── v8.2.2.patch                # Same patch rebased onto the v8.2.2 release tag
+│       ├── v8.3.0-rc.0.patch           # Same patch rebased onto the v8.3.0-rc.0 tag
+│       ├── release-v8.3.0.patch        # Same patch on the release-v8.3.0 branch (router merged into NetworkService)
+│       └── v8.3.2.patch                # Same patch on the v8.3.2 tag (Gloas unscheduled on Hoodi again)
 ├── ci/
 │   ├── Dockerfile.ethpandaops    # Custom Dockerfile (replaces upstream)
 │   └── disable-upstream-workflows.sh
@@ -257,8 +272,30 @@ kurtosis enclave rm -f dimhouse
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `check-patches.yml` | Daily (cron) | Clones upstream, applies patches, builds. Auto-commits if patches needed updating |
-| `docker.yml` | Push to master / release / manual | Builds + pushes multi-arch Docker image to `ethpandaops/dimhouse:<tag>` |
+| `docker.yml` | Push to master or a network branch / release / manual | Builds + pushes multi-arch Docker image to `ethpandaops/dimhouse:<tag>` |
+| `devnet-branches.yml` | Hourly (cron) / manual / PR (dry run) | Creates a network branch for every devnet that lacks one |
 | `validate-patches.yml` | PR | Validates patch file structure (hunk counts, etc.) |
+
+### Devnet images
+
+Every ethpandaops devnet that runs Lighthouse gets `ethpandaops/dimhouse:<network>`, built from branch `<network>` of this repo. A devnet's network name is `<class>-<dir>`, from the repo `ethpandaops/<class>-devnets` and a directory under its `kubernetes/`, such as `glamsterdam-devnet-8` for `glamsterdam-devnets/kubernetes/devnet-8`. A directory that already starts with `<class>-` is the name as is: `pk-devnets/kubernetes/pk-devnet-0` is `pk-devnet-0`.
+
+A network branch has a `network.env` naming the Lighthouse source to build:
+
+```bash
+NETWORK=glamsterdam-devnet-8
+LIGHTHOUSE_REPO=sigp/lighthouse
+LIGHTHOUSE_REF=v8.3.1
+LIGHTHOUSE_COMMIT=          # optional: a full SHA to pin within LIGHTHOUSE_REF
+```
+
+Each push to the branch (or dispatch of `docker.yml` on it) publishes `<network>` and `<network>-<sha7>`. Network images have no `-backfill` variant.
+
+`devnet-branches.yml` runs `scripts/devnet-branches.py` hourly. For each devnet without a branch it resolves the `lighthouse` image in `ansible/inventories/<dir>/group_vars/all/images.yaml` to a source repo and ref through [eth-client-docker-image-builder](https://github.com/ethpandaops/eth-client-docker-image-builder), applies the patch and overlay to it (trying `patches/<org>/<repo>/<ref>.patch` first, then the other patches), and if one applies, pushes branch `<network>` from master with that patch and `network.env`, then dispatches `docker.yml` on it. It never changes an existing branch. Devnets it can't resolve, or where no patch applies, are listed in the job summary; to add one, commit a rebased `patches/<org>/<repo>/<ref>.patch` to master and the next run creates the branch. To see what it would do:
+
+```bash
+GH_TOKEN=$(gh auth token) python3 scripts/devnet-branches.py --dry-run
+```
 
 ### Building a pinned Lighthouse release
 
@@ -272,7 +309,7 @@ Non-`unstable` builds are tagged `<ref>-<sha7>` and `<ref>-<sha7>-backfill` and 
 
 ## Requirements
 
-- Rust/Cargo 1.88+ (for building Lighthouse with edition2024 support)
+- Rust/Cargo 1.91+ (lighthouse MSRV from release-v8.3.0 onwards)
 - Git
 - Bash
 - cmake (required for building native dependencies)

@@ -24,7 +24,9 @@ pub fn create_exporter_from_config<E: EthSpec>(
     match XatuObserver::new_with_full_config(&full_config, None) {
         Ok(middleware) => {
             tracing::info!("Xatu exporter created successfully with config");
-            Some(Arc::new(middleware))
+            let observer = Arc::new(middleware);
+            crate::emitter::register_observer(observer.clone());
+            Some(observer)
         }
         Err(e) => {
             tracing::error!("Failed to create Xatu: {}", e);
@@ -45,7 +47,11 @@ pub fn create_exporter_with_network_info<E: EthSpec>(
 
     let full_config = config.get_full_config();
     match XatuObserver::new_with_full_config(&full_config, Some(network_info)) {
-        Ok(middleware) => Some(Arc::new(middleware)),
+        Ok(middleware) => {
+            let observer = Arc::new(middleware);
+            crate::emitter::register_observer(observer.clone());
+            Some(observer)
+        }
         Err(e) => {
             tracing::error!("FATAL: Failed to create Xatu with network info: {}", e);
             panic!("FATAL: Failed to initialize Xatu - network info is required but initialization failed: {}", e);

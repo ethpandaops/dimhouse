@@ -1,8 +1,7 @@
 use crate::ffi::*;
 use crate::observer_trait::ObserverResult;
 use crossbeam_channel::{bounded, Sender};
-use libp2p::PeerId;
-use lighthouse_network::MessageId;
+use lighthouse_network::{MessageId, PeerId};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -246,6 +245,20 @@ impl XatuObserver {
         self.network_info = Some(network_info);
         self
     }
+
+    /// Queues an event for the next batch, dropping it if the FFI is not ready or the queue is full.
+    #[cfg_attr(not(xatu_partial_columns), allow(dead_code))]
+    pub(crate) fn send(&self, event: EventData) {
+        if !self.initialized.load(Ordering::Relaxed) {
+            return;
+        }
+
+        if let Some(sender) = &self.event_sender {
+            if let Err(e) = sender.try_send(event) {
+                error!(error = %e, "Failed to queue xatu event");
+            }
+        }
+    }
 }
 
 impl crate::observer_trait::XatuObserverTrait for XatuObserver {
@@ -310,7 +323,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         );
 
         if let Some(sender) = &self.event_sender {
-            match sender.send(event) {
+            match sender.try_send(event) {
                 Ok(()) => {
                     debug!(
                         "Queued beacon block event for slot {} from peer {}",
@@ -398,7 +411,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         );
 
         if let Some(sender) = &self.event_sender {
-            if let Err(e) = sender.send(event) {
+            if let Err(e) = sender.try_send(event) {
                 error!("Failed to queue attestation event: {:?}", e);
             } else {
                 debug!(
@@ -482,7 +495,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         );
 
         if let Some(sender) = &self.event_sender {
-            if let Err(e) = sender.send(event) {
+            if let Err(e) = sender.try_send(event) {
                 error!("Failed to queue aggregate and proof event: {:?}", e);
             } else {
                 debug!("Queued aggregate and proof event for slot {}", slot);
@@ -560,7 +573,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         );
 
         if let Some(sender) = &self.event_sender {
-            if let Err(e) = sender.send(event) {
+            if let Err(e) = sender.try_send(event) {
                 error!("Failed to queue blob sidecar event: {:?}", e);
             } else {
                 debug!(
@@ -660,7 +673,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         );
 
         if let Some(sender) = &self.event_sender {
-            if let Err(e) = sender.send(event) {
+            if let Err(e) = sender.try_send(event) {
                 error!("Failed to queue data column sidecar event: {:?}", e);
             } else {
                 debug!(
@@ -723,7 +736,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         };
 
         if let Some(sender) = &self.event_sender {
-            if let Err(e) = sender.send(event) {
+            if let Err(e) = sender.try_send(event) {
                 error!("Failed to queue execution payload envelope event: {:?}", e);
             } else {
                 debug!("Queued execution payload envelope event for slot {}", slot);
@@ -743,7 +756,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         topic: String,
         message_size: usize,
     ) -> ObserverResult {
-        let message = &bid.message;
+        let message = BidFields::from_bid(&bid);
         let slot = message.slot;
 
         debug!(
@@ -779,7 +792,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
             execution_payment: message.execution_payment,
             fee_recipient: format!("0x{}", hex::encode(message.fee_recipient.as_slice())),
             gas_limit: message.gas_limit,
-            blob_kzg_commitment_count: message.blob_kzg_commitments.len() as u32,
+            blob_kzg_commitment_count: message.blob_kzg_commitment_count as u32,
             timestamp_ms: timestamp_millis as i64,
             message_id: hex::encode(&message_id.0),
             topic,
@@ -787,7 +800,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         };
 
         if let Some(sender) = &self.event_sender {
-            if let Err(e) = sender.send(event) {
+            if let Err(e) = sender.try_send(event) {
                 error!("Failed to queue execution payload bid event: {:?}", e);
             } else {
                 debug!("Queued execution payload bid event for slot {}", slot);
@@ -847,7 +860,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         };
 
         if let Some(sender) = &self.event_sender {
-            if let Err(e) = sender.send(event) {
+            if let Err(e) = sender.try_send(event) {
                 error!("Failed to queue payload attestation message event: {:?}", e);
             } else {
                 debug!("Queued payload attestation message event for slot {}", slot);
@@ -906,7 +919,7 @@ impl crate::observer_trait::XatuObserverTrait for XatuObserver {
         };
 
         if let Some(sender) = &self.event_sender {
-            if let Err(e) = sender.send(event) {
+            if let Err(e) = sender.try_send(event) {
                 error!("Failed to queue proposer preferences event: {:?}", e);
             } else {
                 debug!(
@@ -1149,4 +1162,51 @@ fn aggregation_bits_hex<'a, E: EthSpec>(attestation: types::AttestationRef<'a, E
         let _ = cons(att);
         format!("0x{}", ::hex::encode(att.aggregation_bits.as_slice()))
     })
+}
+
+/// The execution payload bid fields the observer exports, independent of the bid's type layout.
+struct BidFields {
+    slot: types::Slot,
+    builder_index: u64,
+    value: u64,
+    execution_payment: u64,
+    block_hash: types::ExecutionBlockHash,
+    parent_block_hash: types::ExecutionBlockHash,
+    fee_recipient: types::Address,
+    gas_limit: u64,
+    blob_kzg_commitment_count: usize,
+}
+
+impl BidFields {
+    #[cfg(xatu_bid_superstruct)]
+    fn from_bid<E: EthSpec>(bid: &SignedExecutionPayloadBid<E>) -> Self {
+        let message = bid.message();
+        Self {
+            slot: message.slot(),
+            builder_index: message.builder_index(),
+            value: message.value(),
+            execution_payment: message.execution_payment(),
+            block_hash: message.block_hash(),
+            parent_block_hash: message.parent_block_hash(),
+            fee_recipient: message.fee_recipient(),
+            gas_limit: message.gas_limit(),
+            blob_kzg_commitment_count: message.blob_kzg_commitments().len(),
+        }
+    }
+
+    #[cfg(not(xatu_bid_superstruct))]
+    fn from_bid<E: EthSpec>(bid: &SignedExecutionPayloadBid<E>) -> Self {
+        let message = &bid.message;
+        Self {
+            slot: message.slot,
+            builder_index: message.builder_index,
+            value: message.value,
+            execution_payment: message.execution_payment,
+            block_hash: message.block_hash,
+            parent_block_hash: message.parent_block_hash,
+            fee_recipient: message.fee_recipient,
+            gas_limit: message.gas_limit,
+            blob_kzg_commitment_count: message.blob_kzg_commitments.len(),
+        }
+    }
 }

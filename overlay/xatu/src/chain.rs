@@ -1,8 +1,7 @@
 //! Wrapper to maintain backwards compatibility with Lighthouse integration
 
 use crate::{ObserverResult, Xatu};
-use libp2p::PeerId;
-use lighthouse_network::MessageId;
+use lighthouse_network::{MessageId, PeerId};
 use std::sync::Arc;
 use types::EthSpec;
 
