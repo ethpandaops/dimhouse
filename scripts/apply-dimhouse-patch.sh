@@ -139,9 +139,11 @@ echo -e "${GREEN}  Copied overlay/xatu/${NC}"
 echo ""
 echo -e "${BLUE}=== Copying CI files ===${NC}"
 
-if [ -f "$REPO_ROOT/ci/Dockerfile.ethpandaops" ]; then
-    cp "$REPO_ROOT/ci/Dockerfile.ethpandaops" Dockerfile
-    echo -e "${GREEN}  Copied Dockerfile.ethpandaops -> Dockerfile${NC}"
+DOCKERFILE="Dockerfile.$BRANCH"
+[ -f "$REPO_ROOT/ci/$DOCKERFILE" ] || DOCKERFILE="Dockerfile.ethpandaops"
+if [ -f "$REPO_ROOT/ci/$DOCKERFILE" ]; then
+    cp "$REPO_ROOT/ci/$DOCKERFILE" Dockerfile
+    echo -e "${GREEN}  Copied $DOCKERFILE -> Dockerfile${NC}"
 fi
 
 # Update dependencies
