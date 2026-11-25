@@ -27,6 +27,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("cargo:rustc-cfg=xatu_partial_columns");
     }
 
+    // PQ lighthouse turns the gossip message types into fork superstructs with XMSS signature variants.
+    println!("cargo:rustc-check-cfg=cfg(xatu_pq)");
+    let attestation_src =
+        Path::new(&manifest_dir).join("../consensus/types/src/attestation/attestation.rs");
+    if fs::read_to_string(&attestation_src).is_ok_and(|src| src.contains("SingleAttestationPq")) {
+        println!("cargo:rustc-cfg=xatu_pq");
+    }
+
     // Use platform-appropriate library extension
     let lib_ext = if cfg!(target_os = "macos") {
         "dylib"
