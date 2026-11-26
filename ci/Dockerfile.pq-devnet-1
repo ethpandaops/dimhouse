@@ -1,0 +1,26 @@
+FROM rust:1.99.1-bookworm AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends clang cmake libclang-dev protobuf-compiler \
+  && rm -rf /var/lib/apt/lists/*
+COPY . lighthouse
+ARG FEATURES=spec-minimal,portable,disable-backfill
+ARG PROFILE=release
+ARG CARGO_USE_GIT_CLI=true
+ARG TARGETARCH
+ENV FEATURES=$FEATURES
+ENV PROFILE=$PROFILE
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=$CARGO_USE_GIT_CLI
+# .cargo/config.toml runs rustc through scripts/leanvm-tier-rustc, which builds leanVM's CPU tiers;
+# the prover picks one at runtime, so no target-cpu is set here.
+RUN cd lighthouse \
+  && test -x scripts/leanvm-tier-rustc \
+  && if [ "$TARGETARCH" = arm64 ]; then export JEMALLOC_SYS_WITH_LG_PAGE=16; fi \
+  && make
+
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3t64 libstdc++6 \
+  && rm -rf /var/lib/apt/lists/*
+COPY --chmod=755 scripts/local_testnet/pq-genesis/lighthouse-pq-bn /usr/local/bin/lighthouse-pq-bn
+COPY leanvm-revision /usr/local/share/lighthouse/leanvm-revision
+COPY --from=builder /usr/local/cargo/bin/lighthouse /usr/local/bin/lighthouse
+ENV LD_LIBRARY_PATH=/usr/local/lib
+COPY --from=builder /lighthouse/target/release/libxatu.so /usr/local/lib/libxatu.so
