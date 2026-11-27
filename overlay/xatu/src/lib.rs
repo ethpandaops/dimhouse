@@ -10,6 +10,8 @@ pub mod shim;
 mod chain;
 mod emitter;
 mod ffi;
+#[cfg(xatu_inclusion_lists)]
+mod inclusion_list;
 mod init;
 mod metrics;
 mod observer_ffi;
@@ -23,6 +25,8 @@ use types::{EthSpec, SignedBeaconBlock};
 
 pub use config::{NetworkInfo, XatuConfig};
 pub use emitter::{events_enabled, set_event_gate, set_fork_context, sync_state_allows_events};
+#[cfg(xatu_inclusion_lists)]
+pub use inclusion_list::on_gossip_inclusion_list;
 pub use init::{init, init_with_chain_spec, init_with_chain_spec_and_genesis};
 #[cfg(xatu_partial_columns)]
 pub use partial::{

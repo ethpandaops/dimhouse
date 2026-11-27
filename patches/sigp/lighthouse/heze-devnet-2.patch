@@ -401,7 +401,7 @@ index 6b81af2..281469b 100644
                  match &availability_processing_status {
                      AvailabilityProcessingStatus::Imported(_, hash) => {
 diff --git a/beacon_node/network/src/service.rs b/beacon_node/network/src/service.rs
-index 223c22f..b69bce0 100644
+index 223c22f..858c9ef 100644
 --- a/beacon_node/network/src/service.rs
 +++ b/beacon_node/network/src/service.rs
 @@ -50,6 +50,7 @@ use types::{
@@ -547,7 +547,7 @@ index 223c22f..b69bce0 100644
          should_process: bool,
      ) {
          let seen_timestamp = self
-@@ -1435,6 +1501,130 @@ impl<T: BeaconChainTypes> NetworkService<T> {
+@@ -1435,6 +1501,140 @@ impl<T: BeaconChainTypes> NetworkService<T> {
              .slot_clock
              .now_duration()
              .unwrap_or_default();
@@ -670,6 +670,16 @@ index 223c22f..b69bce0 100644
 +                    {
 +                        debug!("Xatu error processing proposer preferences: {}", e);
 +                    }
++                }
++                PubsubMessage::InclusionList(inclusion_list) => {
++                    xatu::on_gossip_inclusion_list(
++                        &message_id,
++                        &peer_id,
++                        inclusion_list,
++                        seen_timestamp,
++                        topic.to_string(),
++                        message_size,
++                    );
 +                }
 +                _ => {}
 +            }
