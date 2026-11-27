@@ -1211,7 +1211,7 @@ fn aggregate_signature_hex<E: EthSpec>(aggregate: &SignedAggregateAndProof<E>) -
     signature_hex(&aggregate.signature().serialize())
 }
 
-/// Hex-encodes raw aggregation bits for every attestation variant the linked `types` crate defines.
+/// Hex-encodes the SSZ aggregation bitlist, length bit included, for every attestation variant the linked `types` crate defines.
 fn aggregation_bits_hex<'a, E: EthSpec>(attestation: types::AttestationRef<'a, E>) -> String {
     // The superstruct map macro names each variant struct unqualified, so they must be in scope.
     use types::*;
@@ -1219,7 +1219,7 @@ fn aggregation_bits_hex<'a, E: EthSpec>(attestation: types::AttestationRef<'a, E
     types::map_attestation_ref!(&'a _, attestation, |att, cons| {
         // Calling the variant constructor lets the compiler infer the macro's generic parameters.
         let _ = cons(att);
-        format!("0x{}", ::hex::encode(att.aggregation_bits.as_slice()))
+        format!("0x{}", ::hex::encode(::ssz::Encode::as_ssz_bytes(&att.aggregation_bits)))
     })
 }
 
