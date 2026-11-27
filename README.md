@@ -39,6 +39,7 @@ dimhouse/
 ├── patches/
 │   └── sigp/lighthouse/
 │       ├── unstable.patch              # Base patch: gossip hooks, xatu init, CLI flag
+│       ├── unstable-8e0aeef.patch      # Same patch on unstable at 8e0aeef (bogota-devnet-2, before the Router removal)
 │       ├── unstable-01-optimistic.patch # Extension: bypass EL validation for observation
 │       ├── v8.2.2.patch                # Same patch rebased onto the v8.2.2 release tag
 │       ├── v8.3.0-rc.0.patch           # Same patch rebased onto the v8.3.0-rc.0 tag
@@ -291,6 +292,8 @@ LIGHTHOUSE_REPO=sigp/lighthouse
 LIGHTHOUSE_REF=v8.3.1
 LIGHTHOUSE_COMMIT=          # optional: a full SHA to pin within LIGHTHOUSE_REF
 ```
+
+When `LIGHTHOUSE_COMMIT` is set and `patches/<org>/<repo>/<ref>-<sha7>.patch` exists for it, that patch is applied instead of `<ref>.patch`, so a devnet pinned to an older commit keeps building after `<ref>.patch` moves on (`apply-dimhouse-patch.sh` picks `<ref>-<sha7>.patch` whenever the checked-out commit matches).
 
 Each push to the branch (or dispatch of `docker.yml` on it) publishes `<network>` and `<network>-<sha7>`. Network images have no `-backfill` variant.
 
