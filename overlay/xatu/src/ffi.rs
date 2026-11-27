@@ -184,6 +184,18 @@ pub enum EventData {
         topic: String,
         message_size: u32,
     },
+    #[serde(rename = "INCLUSION_LIST")]
+    InclusionList {
+        peer_id: String,
+        slot: u64,
+        validator_index: u64,
+        dependent_root: String,
+        transactions: Vec<String>,
+        timestamp_ms: i64,
+        message_id: String,
+        topic: String,
+        message_size: u32,
+    },
     #[serde(rename = "PARTIAL_DATA_COLUMN")]
     PartialDataColumn(PartialDataColumnPart),
     #[serde(rename = "DATA_COLUMN_COMPLETED")]

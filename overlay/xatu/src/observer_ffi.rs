@@ -247,7 +247,7 @@ impl XatuObserver {
     }
 
     /// Queues an event for the next batch, dropping it if the FFI is not ready or the queue is full.
-    #[cfg_attr(not(xatu_partial_columns), allow(dead_code))]
+    #[cfg_attr(not(any(xatu_partial_columns, xatu_inclusion_lists)), allow(dead_code))]
     pub(crate) fn send(&self, event: EventData) {
         if !self.initialized.load(Ordering::Relaxed) {
             return;

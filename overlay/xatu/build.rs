@@ -27,6 +27,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("cargo:rustc-cfg=xatu_partial_columns");
     }
 
+    // Inclusion list capture needs the EIP-7805 (FOCIL) types.
+    println!("cargo:rustc-check-cfg=cfg(xatu_inclusion_lists)");
+    let inclusion_list_src = Path::new(&manifest_dir)
+        .join("../consensus/types/src/execution/signed_inclusion_list.rs");
+    if inclusion_list_src.exists() {
+        println!("cargo:rustc-cfg=xatu_inclusion_lists");
+    }
+
     // PQ lighthouse turns the gossip message types into fork superstructs with XMSS signature variants.
     println!("cargo:rustc-check-cfg=cfg(xatu_pq)");
     let attestation_src =

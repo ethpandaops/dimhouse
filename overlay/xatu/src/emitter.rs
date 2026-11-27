@@ -19,7 +19,7 @@ pub(crate) fn register_observer(observer: Arc<XatuObserver>) {
 }
 
 /// Returns the registered observer while the event gate is open.
-#[cfg_attr(not(xatu_partial_columns), allow(dead_code))]
+#[cfg_attr(not(any(xatu_partial_columns, xatu_inclusion_lists)), allow(dead_code))]
 pub(crate) fn active_observer() -> Option<&'static XatuObserver> {
     let observer = OBSERVER.get()?;
     events_enabled().then_some(observer.as_ref())
