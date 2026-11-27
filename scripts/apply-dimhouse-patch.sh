@@ -41,8 +41,12 @@ if [ ! -d ".git" ]; then
     exit 1
 fi
 
-# Find patch file
-PATCH_FILE="$REPO_ROOT/patches/$ORG/$REPO/$BRANCH.patch"
+# Find patch file: <branch>-<sha7>.patch for the checked-out commit, else <branch>.patch
+HEAD_COMMIT=$(git rev-parse HEAD)
+PATCH_FILE="$REPO_ROOT/patches/$ORG/$REPO/$BRANCH-${HEAD_COMMIT:0:7}.patch"
+if [ ! -f "$PATCH_FILE" ]; then
+    PATCH_FILE="$REPO_ROOT/patches/$ORG/$REPO/$BRANCH.patch"
+fi
 if [ ! -f "$PATCH_FILE" ]; then
     echo "Error: Patch not found at patches/$ORG/$REPO/$BRANCH.patch"
     exit 1
